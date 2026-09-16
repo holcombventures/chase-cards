@@ -1,0 +1,109 @@
+"use client";
+
+import { PREMIUM_PRICE_LABEL } from "@/hooks/usePremium";
+
+type Props = {
+  /** Short headline, e.g. "19 more chase · 122 in set" */
+  title: string;
+  /** Supporting copy under the title */
+  message: string;
+  onUnlock: () => void;
+  /** Compact strip under free chase tiles vs full-panel entire-set gate */
+  variant?: "panel" | "inline";
+};
+
+export function PremiumGate({
+  title,
+  message,
+  onUnlock,
+  variant = "panel",
+}: Props) {
+  const shell =
+    variant === "inline"
+      ? "relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-slate-900/90 via-slate-950 to-amber-950/30 p-5 sm:p-6"
+      : "mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-b from-slate-900/80 to-slate-950/90 px-6 py-10 text-center shadow-lg shadow-amber-950/20";
+
+  return (
+    <div className={shell} role="region" aria-label="Premium unlock">
+      <div
+        className={`flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-300 ${variant === "panel" ? "" : "mb-1"}`}
+        aria-hidden
+      >
+        <LockIcon />
+      </div>
+      <h3
+        className={`font-semibold text-white ${variant === "panel" ? "text-lg" : "text-base sm:text-lg"}`}
+      >
+        {title}
+      </h3>
+      <p
+        className={`text-sm text-slate-300 ${variant === "panel" ? "max-w-sm opacity-90" : "max-w-xl opacity-90"}`}
+      >
+        {message}
+      </p>
+      <ul className="mt-1 space-y-1 text-left text-xs text-slate-400 sm:text-sm">
+        <li className="flex items-start gap-2">
+          <CheckIcon />
+          <span>Full chase list (top 20% by market price)</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <CheckIcon />
+          <span>Entire set view for every card</span>
+        </li>
+      </ul>
+      <div className={`flex flex-wrap items-center gap-3 ${variant === "panel" ? "justify-center" : ""} pt-2`}>
+        <button
+          type="button"
+          onClick={onUnlock}
+          className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+        >
+          Unlock Premium · {PREMIUM_PRICE_LABEL}
+        </button>
+        <span className="text-[11px] text-slate-500">Demo unlock · no payment</span>
+      </div>
+    </div>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M7 11V8a5 5 0 0 1 10 0v3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect
+        x="5"
+        y="11"
+        width="14"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      className="mt-0.5 shrink-0 text-amber-400"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <path
+        d="M5 13l4 4L19 7"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
