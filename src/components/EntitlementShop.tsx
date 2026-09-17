@@ -1,31 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { CategoryId } from "@/lib/catalog/types";
 import {
-  ADDON_CATEGORY_IDS,
-  getCategory,
-  type CategoryId,
-} from "@/lib/catalog/types";
-import {
-  ADDON_PRICE_LABEL,
-  ALL_ACCESS_PRICE_LABEL,
   PREMIUM_PRICE_LABEL,
   type EntitlementsState,
   type SportAddonId,
 } from "@/lib/entitlements";
-import {
-  SPORT_ADDON_IDS,
-  type CheckoutEntitlementKey,
-} from "@/lib/stripe/catalog";
+import type { CheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 
-const SPORT_LABELS: Record<SportAddonId, string> = {
-  baseball: "Baseball",
-  basketball: "Basketball",
-  football: "Football",
-  hockey: "Hockey",
-  soccer: "Soccer",
-};
+/**
+ * While only Pokémon is live, hide category/sport add-on and All Access
+ * purchase CTAs. Flip this when One Piece / MTG / Sports catalogs ship.
+ */
+export const SHOW_ADDON_PURCHASES = false;
 
 type Props = {
   entitlements: EntitlementsState;
@@ -42,11 +31,11 @@ type Props = {
 export function EntitlementShop({
   entitlements,
   onUnlockPremium,
-  onUnlockAddon,
-  onUnlockSport,
-  onUnlockAllAccess,
+  onUnlockAddon: _onUnlockAddon,
+  onUnlockSport: _onUnlockSport,
+  onUnlockAllAccess: _onUnlockAllAccess,
   onRestoreFree,
-  highlightAddon = null,
+  highlightAddon: _highlightAddon = null,
   compact = false,
 }: Props) {
   const [busy, setBusy] = useState<CheckoutEntitlementKey | null>(null);
@@ -114,102 +103,21 @@ export function EntitlementShop({
         <ShopCard
           title="Premium"
           price={PREMIUM_PRICE_LABEL}
-          description="Full chase (top 20%) + entire set in owned categories. Pokémon included."
+          description="Full chase (top 20%) + entire set for Pokémon. More categories coming soon."
           owned={entitlements.premium || entitlements.allAccess}
           ownedLabel={entitlements.allAccess ? "Included in All Access" : "Owned"}
           busy={busy === "premium"}
           onClick={() => void buy("premium", onUnlockPremium)}
           accent="amber"
         />
-
-        <ShopCard
-          title="All Access"
-          price={ALL_ACCESS_PRICE_LABEL}
-          description="Permanent unlock for all live categories + category & sport add-ons. Best for multi-TCG."
-          owned={entitlements.allAccess}
-          ownedLabel="Owned"
-          busy={busy === "all_access"}
-          onClick={() => void buy("all_access", onUnlockAllAccess)}
-          accent="violet"
-          highlight
-        />
-
-        {ADDON_CATEGORY_IDS.map((id) => {
-          const cat = getCategory(id);
-          const owned =
-            entitlements.allAccess ||
-            entitlements.categories.includes(id) ||
-            (id === "sports" && entitlements.sports.length > 0);
-          const isHighlight = highlightAddon === id;
-          const key = id as CheckoutEntitlementKey;
-          return (
-            <ShopCard
-              key={id}
-              title={`${cat.shortLabel} add-on`}
-              price={cat.priceLabel ?? ADDON_PRICE_LABEL}
-              description={
-                cat.status === "coming_soon"
-                  ? id === "sports"
-                    ? `Unlocks Sports when the catalog goes live. Per-sport add-ons below also reserve entitlement.`
-                    : `Unlocks ${cat.label} when the catalog goes live. Adapter not live yet.`
-                  : `Unlocks ${cat.label} chase & set browsing.`
-              }
-              owned={owned}
-              ownedLabel={
-                entitlements.allAccess ? "Included in All Access" : "Owned"
-              }
-              busy={busy === key}
-              onClick={() => void buy(key, () => onUnlockAddon(id))}
-              accent="sky"
-              highlight={isHighlight}
-            />
-          );
-        })}
       </div>
 
-      <div className="mt-4">
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Sports add-ons (per sport)
-        </h4>
-        <p className="mb-2.5 text-[11px] text-slate-500">
-          Generic Sports stays coming soon until adapters ship. Buying a sport
-          sets that flag for future use.
+      {!SHOW_ADDON_PURCHASES ? (
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          Category and sport add-ons (and All Access) will appear here when those
+          catalogs go live. Pokémon Premium is available today.
         </p>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {SPORT_ADDON_IDS.map((sportId) => {
-            const key =
-              `sports-${sportId}` as CheckoutEntitlementKey;
-            const owned =
-              entitlements.allAccess ||
-              entitlements.categories.includes("sports") ||
-              entitlements.sports.includes(sportId);
-            return (
-              <ShopCard
-                key={sportId}
-                title={`${SPORT_LABELS[sportId]} add-on`}
-                price={ADDON_PRICE_LABEL}
-                description={`Reserves ${SPORT_LABELS[sportId]} entitlement for when sports adapters go live.`}
-                owned={owned}
-                ownedLabel={
-                  entitlements.allAccess
-                    ? "Included in All Access"
-                    : entitlements.categories.includes("sports")
-                      ? "Included in Sports"
-                      : "Owned"
-                }
-                busy={busy === key}
-                onClick={() =>
-                  void buy(key, () => {
-                    if (onUnlockSport) onUnlockSport(sportId);
-                    else onUnlockAddon("sports");
-                  })
-                }
-                accent="sky"
-              />
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
       {hasAny ? (
         <div className="mt-4 flex justify-end">

@@ -349,9 +349,7 @@ export function ChaseApp() {
           live today — free shows the{" "}
           <strong className="font-semibold text-amber-200">top 3 chase</strong>;
           Premium ({PREMIUM_PRICE_LABEL}) unlocks full chase + entire set.
-          One Piece, MTG, and Sports are selectable now with coming-soon
-          catalogs; add-ons ({"$2.99"}) or All Access ({"$29.99"}) reserve
-          entitlement for when they go live.
+          One Piece, MTG, and Sports are coming soon (catalogs not live yet).
         </p>
       </header>
 
@@ -630,8 +628,7 @@ export function ChaseApp() {
           <>
             {" "}
             · Free: Pokémon top {FREE_CHASE_LIMIT} chase · Premium{" "}
-            {PREMIUM_PRICE_LABEL} · Add-ons $2.99 · All Access $29.99 (demo, no
-            payment).
+            {PREMIUM_PRICE_LABEL} unlocks full chase + entire set.
           </>
         ) : null}
       </footer>
@@ -644,8 +641,8 @@ function ComingSoonCategoryPanel({
   hint,
   ownsThis,
   hasPremium,
-  onUnlockAddon,
-  onUnlockAllAccess,
+  onUnlockAddon: _onUnlockAddon,
+  onUnlockAllAccess: _onUnlockAllAccess,
   onUnlockPremium,
 }: {
   categoryId: CategoryId;
@@ -692,11 +689,6 @@ function ComingSoonCategoryPanel({
     );
   }
 
-  const addonKey =
-    categoryId === "one-piece" || categoryId === "mtg" || categoryId === "sports"
-      ? categoryId
-      : null;
-
   return (
     <div
       className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-b from-slate-900/80 to-slate-950/90 px-6 py-10 text-center shadow-lg shadow-amber-950/20"
@@ -710,51 +702,25 @@ function ComingSoonCategoryPanel({
         {cat.label} adapter not live yet
       </h2>
       <p className="max-w-sm text-sm text-slate-300 opacity-90">
-        You can select this category now. Unlock the{" "}
-        <strong className="text-amber-200">{cat.shortLabel} add-on</strong> (
-        {cat.priceLabel}) or <strong className="text-violet-200">All Access</strong>{" "}
-        ($29.99) to reserve entitlement for when the catalog goes live.
-        {hasPremium
-          ? " Premium covers Pokémon depth; other categories need an add-on or All Access."
-          : " Premium ($4.99) unlocks full Pokémon chase today."}
+        You can select this category now, but the catalog isn’t available yet.
+        Add-on purchases will open when {cat.label} goes live. Pokémon remains
+        fully available
+        {hasPremium ? " with your Premium unlock." : " — Premium unlocks full chase today."}
       </p>
-      <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
-        {addonKey ? (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void buy(addonKey, onUnlockAddon)}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-sky-300 disabled:opacity-60"
-          >
-            {busy === addonKey
-              ? "Working…"
-              : `Unlock ${cat.shortLabel} · ${cat.priceLabel}`}
-          </button>
-        ) : null}
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => void buy("all_access", onUnlockAllAccess)}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-violet-300 disabled:opacity-60"
-        >
-          {busy === "all_access" ? "Working…" : "All Access · $29.99"}
-        </button>
-        {!hasPremium ? (
+      {!hasPremium ? (
+        <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:justify-center">
           <button
             type="button"
             disabled={busy !== null}
             onClick={() => void buy("premium", onUnlockPremium)}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-400/20 disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60"
           >
             {busy === "premium"
               ? "Working…"
               : `Premium · ${PREMIUM_PRICE_LABEL}`}
           </button>
-        ) : null}
-      </div>
-      <span className="text-[11px] text-slate-500">
-        Stripe when configured · demo unlock otherwise
-      </span>
+        </div>
+      ) : null}
     </div>
   );
 }
