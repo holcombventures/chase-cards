@@ -32,9 +32,24 @@ import { EntitlementShop } from "./EntitlementShop";
 import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
+import { fetchJsonWithRetry } from "@/lib/fetchJson";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
+
+
+function pickDefaultSetId(sets: PokemonSet[]): string {
+  if (!sets.length) return "";
+  // Prefer a set released at least 3 days ago so brand-new upstream gaps
+  // are less likely to be the first thing a visitor hits.
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  const stable = sets.find((s) => {
+    const raw = (s.releaseDate || "").replace(/\//g, "-");
+    const t = Date.parse(raw);
+    return Number.isFinite(t) && t <= cutoff;
+  });
+  return (stable ?? sets[0]).id;
+}
 
 export function ChaseApp() {
   const {
@@ -163,6 +178,25 @@ export function ChaseApp() {
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [setStats, setSetStats] = useState<SetStats | null>(null);
 
+  const reloadSets = useCallback(async () => {
+    setSetsLoading(true);
+    setSetsError(null);
+    try {
+      const { res, body } = await fetchJsonWithRetry<{
+        data?: PokemonSet[];
+        error?: string;
+      }>("/api/sets");
+      if (!res.ok) throw new Error(body.error || "Failed to load sets.");
+      const list = (body.data as PokemonSet[]) || [];
+      setSets(list);
+      setSetId((prev) => prev || pickDefaultSetId(list));
+    } catch (e) {
+      setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
+    } finally {
+      setSetsLoading(false);
+    }
+  }, []);
+
   // Only load Pokémon sets when Pokémon is selected
   useEffect(() => {
     if (!isPokemon) {
@@ -175,10 +209,15 @@ export function ChaseApp() {
       setSetsLoading(true);
       setSetsError(null);
       try {
-        const res = await fetch("/api/sets");
-        const body = await res.json();
+        const { res, body } = await fetchJsonWithRetry<{
+          data?: PokemonSet[];
+          error?: string;
+        }>("/api/sets");
         if (!res.ok) throw new Error(body.error || "Failed to load sets.");
-        if (!cancelled) setSets(body.data as PokemonSet[]);
+        if (cancelled) return;
+        const list = (body.data as PokemonSet[]) || [];
+        setSets(list);
+        setSetId((prev) => prev || pickDefaultSetId(list));
       } catch (e) {
         if (!cancelled) {
           setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
@@ -192,44 +231,58 @@ export function ChaseApp() {
     };
   }, [isPokemon]);
 
-  const loadCards = useCallback(async (id: string, releaseDate?: string | null) => {
-    if (!id) {
-      setCards([]);
-      setPricedCount(0);
-      setPriceSource(null);
-      setFallbackUsed(false);
-      setSetStats(null);
+  const loadCards = useCallback(
+    async (
+      id: string,
+      releaseDate?: string | null,
+      setName?: string | null
+    ) => {
+      if (!id) {
+        setCards([]);
+        setPricedCount(0);
+        setPriceSource(null);
+        setFallbackUsed(false);
+        setSetStats(null);
+        setCardsError(null);
+        return;
+      }
+      setCardsLoading(true);
       setCardsError(null);
-      return;
-    }
-    setCardsLoading(true);
-    setCardsError(null);
-    setSetStats(null);
-    try {
-      const qs = new URLSearchParams();
-      if (releaseDate) qs.set("releaseDate", releaseDate);
-      const q = qs.toString();
-      const res = await fetch(
-        `/api/sets/${encodeURIComponent(id)}/cards${q ? `?${q}` : ""}`
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Failed to load cards.");
-      setCards(body.data as CardWithPrice[]);
-      setPricedCount(body.meta?.pricedCount ?? 0);
-      setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
-      setFallbackUsed(Boolean(body.meta?.fallbackUsed));
-      setSetStats((body.meta?.stats as SetStats) ?? null);
-    } catch (e) {
-      setCards([]);
-      setPricedCount(0);
-      setPriceSource(null);
-      setFallbackUsed(false);
       setSetStats(null);
-      setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
-    } finally {
-      setCardsLoading(false);
-    }
-  }, []);
+      try {
+        const qs = new URLSearchParams();
+        if (releaseDate) qs.set("releaseDate", releaseDate);
+        if (setName) qs.set("setName", setName);
+        const q = qs.toString();
+        const { res, body } = await fetchJsonWithRetry<{
+          data?: CardWithPrice[];
+          meta?: {
+            pricedCount?: number;
+            priceSource?: CardsMetaPriceSource;
+            fallbackUsed?: boolean;
+            stats?: SetStats;
+          };
+          error?: string;
+        }>(`/api/sets/${encodeURIComponent(id)}/cards${q ? `?${q}` : ""}`);
+        if (!res.ok) throw new Error(body.error || "Failed to load cards.");
+        setCards((body.data as CardWithPrice[]) || []);
+        setPricedCount(body.meta?.pricedCount ?? 0);
+        setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
+        setFallbackUsed(Boolean(body.meta?.fallbackUsed));
+        setSetStats((body.meta?.stats as SetStats) ?? null);
+      } catch (e) {
+        setCards([]);
+        setPricedCount(0);
+        setPriceSource(null);
+        setFallbackUsed(false);
+        setSetStats(null);
+        setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
+      } finally {
+        setCardsLoading(false);
+      }
+    },
+    []
+  );
 
   const selectedSet = sets.find((s) => s.id === setId);
 
@@ -244,7 +297,7 @@ export function ChaseApp() {
       setCardsLoading(false);
       return;
     }
-    void loadCards(setId, selectedSet?.releaseDate ?? null);
+    void loadCards(setId, selectedSet?.releaseDate ?? null, selectedSet?.name ?? null);
   }, [isPokemon, setId, selectedSet?.releaseDate, loadCards]);
 
   const handleCategoryChange = useCallback((id: CategoryId) => {
@@ -389,6 +442,7 @@ export function ChaseApp() {
               variant="error"
               title="Couldn’t load sets"
               message={setsError}
+              onRetry={() => void reloadSets()}
             />
           ) : sets.length === 0 ? (
             <StatusPanel
@@ -468,6 +522,13 @@ export function ChaseApp() {
               variant="error"
               title="Couldn’t load cards"
               message={cardsError}
+              onRetry={() =>
+                void loadCards(
+                  setId,
+                  selectedSet?.releaseDate ?? null,
+                  selectedSet?.name ?? null
+                )
+              }
             />
           ) : cards.length === 0 ? (
             <StatusPanel

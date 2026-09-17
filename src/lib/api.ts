@@ -1,7 +1,7 @@
 import type { PokemonCard, PokemonSet } from "./types";
 
 const API_BASE = "https://api.pokemontcg.io/v2";
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 
 export class PokemonTcgApiError extends Error {
   status: number;
@@ -27,6 +27,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 async function apiFetch<T>(
   path: string,
   searchParams?: Record<string, string>
@@ -40,42 +44,73 @@ async function apiFetch<T>(
 
   let lastStatus = 0;
   let lastBody = "";
+  let lastNetworkError: unknown = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url.toString(), {
-      headers: getHeaders(),
-      // Avoid Next.js Data Cache pinning a transient upstream failure
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch(url.toString(), {
+        headers: getHeaders(),
+        // Avoid Next.js Data Cache pinning a transient upstream failure
+        cache: "no-store",
+      });
 
-    lastStatus = res.status;
-    lastBody = await res.text();
+      lastStatus = res.status;
+      lastBody = await res.text();
+      lastNetworkError = null;
 
-    if (res.status === 429) {
-      throw new PokemonTcgApiError(
-        "Rate limited by the Pokémon TCG API. Set POKEMONTCG_API_KEY for higher limits, or try again shortly.",
-        429
-      );
-    }
+      // Soft-retry rate limits with backoff (instead of failing immediately)
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        await sleep(600 * attempt);
+        continue;
+      }
 
-    if (res.ok) {
-      try {
-        return JSON.parse(lastBody) as T;
-      } catch {
+      if (res.status === 429) {
         throw new PokemonTcgApiError(
-          "Pokémon TCG API returned invalid JSON.",
-          502
+          "Rate limited by the Pokémon TCG API. Set POKEMONTCG_API_KEY for higher limits, or try again shortly.",
+          429
         );
       }
-    }
 
-    // Retry transient upstream errors
-    if ((res.status >= 500 || res.status === 408) && attempt < MAX_RETRIES) {
-      await sleep(400 * attempt);
-      continue;
-    }
+      if (res.ok) {
+        try {
+          return JSON.parse(lastBody) as T;
+        } catch {
+          if (attempt < MAX_RETRIES) {
+            await sleep(400 * attempt);
+            continue;
+          }
+          throw new PokemonTcgApiError(
+            "Pokémon TCG API returned invalid JSON.",
+            502
+          );
+        }
+      }
 
-    break;
+      if (isRetryableStatus(res.status) && attempt < MAX_RETRIES) {
+        await sleep(500 * attempt);
+        continue;
+      }
+
+      break;
+    } catch (err) {
+      if (err instanceof PokemonTcgApiError) throw err;
+      lastNetworkError = err;
+      if (attempt < MAX_RETRIES) {
+        await sleep(500 * attempt);
+        continue;
+      }
+      throw new PokemonTcgApiError(
+        "Pokémon TCG API is unreachable right now. Trying again usually works.",
+        502
+      );
+    }
+  }
+
+  if (lastNetworkError) {
+    throw new PokemonTcgApiError(
+      "Pokémon TCG API is unreachable right now. Trying again usually works.",
+      502
+    );
   }
 
   throw new PokemonTcgApiError(

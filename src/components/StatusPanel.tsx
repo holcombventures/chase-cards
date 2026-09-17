@@ -2,9 +2,17 @@ type Props = {
   variant: "loading" | "empty" | "error";
   title: string;
   message?: string;
+  onRetry?: () => void;
+  retryLabel?: string;
 };
 
-export function StatusPanel({ variant, title, message }: Props) {
+export function StatusPanel({
+  variant,
+  title,
+  message,
+  onRetry,
+  retryLabel = "Retry",
+}: Props) {
   const accent =
     variant === "error"
       ? "border-rose-500/30 bg-rose-950/40 text-rose-100"
@@ -25,6 +33,15 @@ export function StatusPanel({ variant, title, message }: Props) {
       ) : null}
       <h2 className="text-lg font-semibold">{title}</h2>
       {message ? <p className="text-sm opacity-80">{message}</p> : null}
+      {variant === "error" && onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 inline-flex min-h-10 items-center justify-center rounded-lg bg-amber-400 px-4 text-sm font-bold text-slate-950 hover:bg-amber-300"
+        >
+          {retryLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

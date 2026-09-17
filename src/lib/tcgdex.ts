@@ -5,6 +5,8 @@
  * https://api.tcgdex.net — no API key required.
  */
 
+import type { CardWithPrice } from "@/lib/types";
+
 const TCGDEX_BASE = "https://api.tcgdex.net/v2/en";
 const CONCURRENCY = 10;
 
@@ -45,6 +47,7 @@ type TcgdexSetDetail = {
   id: string;
   name: string;
   releaseDate?: string;
+  cardCount?: { total?: number; official?: number };
   cards: Array<{
     id: string;
     localId: string;
@@ -82,6 +85,9 @@ type TcgdexCardFull = {
   id: string;
   localId: string;
   name: string;
+  image?: string | null;
+  rarity?: string | null;
+  set?: { id?: string; name?: string; cardCount?: { total?: number; official?: number } };
   pricing?: {
     tcgplayer?: TcgplayerPricingBlock;
     cardmarket?: CardmarketPricingBlock;
@@ -138,6 +144,13 @@ async function tcgdexFetch<T>(path: string): Promise<T> {
 
 let setsCache: TcgdexSetSummary[] | null = null;
 
+
+/** Known pokemontcg → TCGdex id aliases when heuristics/name matching fail. */
+const SET_ID_ALIASES: Record<string, string> = {
+  me55c: "30th-c",
+  me55: "30th",
+};
+
 /** In-memory cache so cards fallback + stats share one TCGdex load per set. */
 const setBundleCache = new Map<string, Promise<TcgdexSetPriceBundle>>();
 
@@ -158,13 +171,18 @@ export async function resolveTcgdexSetId(
 ): Promise<string | null> {
   const sets = await listTcgdexSets();
   const nameNorm = (setName || "").trim().toLowerCase();
+  const lowerId = pokemontcgId.trim().toLowerCase();
+
+  const aliased = SET_ID_ALIASES[lowerId];
+  if (aliased && sets.some((s) => s.id.toLowerCase() === aliased.toLowerCase())) {
+    return sets.find((s) => s.id.toLowerCase() === aliased.toLowerCase())!.id;
+  }
 
   if (nameNorm) {
     const exactName = sets.find((s) => s.name.trim().toLowerCase() === nameNorm);
     if (exactName) return exactName.id;
   }
 
-  const lowerId = pokemontcgId.trim().toLowerCase();
   if (sets.some((s) => s.id.toLowerCase() === lowerId)) {
     return sets.find((s) => s.id.toLowerCase() === lowerId)!.id;
   }
@@ -448,6 +466,125 @@ export async function fetchTcgdexFallbackPrices(
   const tcgdexSetId = await resolveTcgdexSetId(pokemontcgSetId, setName);
   if (!tcgdexSetId) return null;
   return fetchTcgdexPricesForSet(tcgdexSetId);
+}
+
+
+/**
+ * When Pokémon TCG API is down or returns no cards, build a priced catalog
+ * entirely from TCGdex (images + market prices).
+ */
+export async function fetchTcgdexOnlyCards(
+  pokemontcgSetId: string,
+  setName?: string | null
+): Promise<{ cards: CardWithPrice[]; bundle: TcgdexSetPriceBundle } | null> {
+  const tcgdexSetId = await resolveTcgdexSetId(pokemontcgSetId, setName);
+  if (!tcgdexSetId) return null;
+
+  const detail = await tcgdexFetch<TcgdexSetDetail>(
+    `/sets/${encodeURIComponent(tcgdexSetId)}`
+  );
+  const listings = detail.cards ?? [];
+  const releaseDate =
+    typeof detail.releaseDate === "string" && detail.releaseDate.trim()
+      ? detail.releaseDate.trim()
+      : null;
+  const setDisplayName = detail.name || setName || pokemontcgSetId;
+  const printedTotal =
+    detail.cardCount?.official ?? detail.cardCount?.total ?? listings.length;
+
+  const rows = await mapPool(listings, CONCURRENCY, async (listing) => {
+    try {
+      const full = await tcgdexFetch<TcgdexCardFull>(
+        `/cards/${encodeURIComponent(listing.id)}`
+      );
+      const number = full.localId || listing.localId;
+      const numberKey = normalizeCardNumber(number);
+      const name = full.name || listing.name;
+      const price = extractTcgdexMarketPrice(full);
+      const cm = extractTcgdexCardmarket(full);
+      const imageBase =
+        typeof full.image === "string" && full.image.trim()
+          ? full.image.trim()
+          : null;
+      const small = imageBase ? `${imageBase}/low.webp` : "";
+      const large = imageBase ? `${imageBase}/high.webp` : "";
+
+      const card: CardWithPrice = {
+        id: `${pokemontcgSetId}-${number}`,
+        name,
+        number,
+        rarity: full.rarity || undefined,
+        images: { small, large },
+        set: {
+          id: pokemontcgSetId,
+          name: setDisplayName,
+          printedTotal: printedTotal || listings.length,
+          total: listings.length,
+        },
+        marketPrice: price?.marketPrice ?? null,
+        priceVariant: price?.priceVariant ?? null,
+        priceUpdatedAt: price?.priceUpdatedAt ?? null,
+        priceSource: price ? "tcgdex" : null,
+      };
+
+      return {
+        card,
+        priceHit: price
+          ? ({
+              marketPrice: price.marketPrice,
+              priceVariant: price.priceVariant,
+              priceUpdatedAt: price.priceUpdatedAt,
+              source: "tcgdex" as const,
+              numberKey,
+              name,
+            } satisfies TcgdexPriceHit)
+          : null,
+        cardmarket: cm
+          ? ({
+              numberKey,
+              name,
+              current: cm.current,
+              currentField: cm.currentField,
+              avg30: cm.avg30,
+              updatedAt: cm.updatedAt,
+            } satisfies TcgdexCardmarketHit)
+          : null,
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  const cards: CardWithPrice[] = [];
+  const prices = new Map<string, TcgdexPriceHit[]>();
+  const cardmarket = new Map<string, TcgdexCardmarketHit[]>();
+  for (const row of rows) {
+    if (!row) continue;
+    cards.push(row.card);
+    if (row.priceHit) {
+      const list = prices.get(row.priceHit.numberKey) ?? [];
+      list.push(row.priceHit);
+      prices.set(row.priceHit.numberKey, list);
+    }
+    if (row.cardmarket) {
+      const list = cardmarket.get(row.cardmarket.numberKey) ?? [];
+      list.push(row.cardmarket);
+      cardmarket.set(row.cardmarket.numberKey, list);
+    }
+  }
+
+  if (cards.length === 0) return null;
+
+  const bundle: TcgdexSetPriceBundle = {
+    tcgdexSetId,
+    releaseDate,
+    prices,
+    cardmarket,
+  };
+  // Warm the shared cache for /stats
+  setBundleCache.set(tcgdexSetId, Promise.resolve(bundle));
+
+  return { cards, bundle };
 }
 
 /** Flatten unique Cardmarket hits (one per numberKey, first entry). */
