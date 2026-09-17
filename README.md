@@ -18,7 +18,7 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
 - **Entitlements (demo localStorage)**:
   - **Free**: live catalogs (Pokémon + One Piece), top **3** chase (soft-lock remainder + unlock CTAs)
   - **Premium $4.99**: full chase (top 20%) + entire set for Pokémon; for One Piece also needs the One Piece add-on
-  - **Category add-on $1.99** each (`one-piece`, `mtg`, `sports`): One Piece add-on unlocks full OP depth with Premium; MTG/Sports still reserve coming-soon entitlement
+  - **Category add-on $2.99** each (`one-piece`, `mtg`, `sports`): One Piece add-on unlocks full OP depth with Premium; MTG/Sports still reserve coming-soon entitlement
   - **All Access $29.99** (permanent demo): Premium + all category add-ons; full depth on all live catalogs
   - Coming-soon categories: entitled → “catalog coming soon”; otherwise paywall CTAs.
   - Legacy `chase-cards-premium` key migrates into the new entitlements store
