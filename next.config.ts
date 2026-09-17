@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
         hostname: "images.pokemontcg.io",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "optcg-api.arjunbansal-ai.workers.dev",
+        pathname: "/images/**",
+      },
+      {
+        protocol: "https",
+        hostname: "optcgapi.com",
+        pathname: "/media/**",
+      },
     ],
   },
 };

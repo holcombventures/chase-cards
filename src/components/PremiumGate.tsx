@@ -2,20 +2,37 @@
 
 import { PREMIUM_PRICE_LABEL } from "@/hooks/usePremium";
 
+export type GateAction = {
+  label: string;
+  onClick: () => void;
+  /** Visual accent for the button */
+  accent?: "amber" | "sky" | "violet";
+};
+
 type Props = {
   /** Short headline, e.g. "19 more chase · 122 in set" */
   title: string;
   /** Supporting copy under the title */
   message: string;
-  onUnlock: () => void;
+  /** Primary unlock — defaults to Premium when actions omitted */
+  onUnlock?: () => void;
+  /** Optional multi-CTA (Premium + add-on / All Access). Overrides onUnlock button. */
+  actions?: GateAction[];
   /** Compact strip under free chase tiles vs full-panel entire-set gate */
   variant?: "panel" | "inline";
 };
+
+function accentClass(accent: GateAction["accent"] = "amber") {
+  if (accent === "violet") return "bg-violet-400 text-slate-950 hover:bg-violet-300";
+  if (accent === "sky") return "bg-sky-400 text-slate-950 hover:bg-sky-300";
+  return "bg-amber-400 text-slate-950 hover:bg-amber-300";
+}
 
 export function PremiumGate({
   title,
   message,
   onUnlock,
+  actions,
   variant = "panel",
 }: Props) {
   const shell =
@@ -23,8 +40,19 @@ export function PremiumGate({
       ? "relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-slate-900/90 via-slate-950 to-amber-950/30 p-5 sm:p-6"
       : "mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-b from-slate-900/80 to-slate-950/90 px-6 py-10 text-center shadow-lg shadow-amber-950/20";
 
+  const resolvedActions: GateAction[] =
+    actions && actions.length > 0
+      ? actions
+      : [
+          {
+            label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
+            onClick: onUnlock ?? (() => {}),
+            accent: "amber",
+          },
+        ];
+
   return (
-    <div className={shell} role="region" aria-label="Premium unlock">
+    <div className={shell} role="region" aria-label="Unlock full access">
       <div
         className={`flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-300 ${variant === "panel" ? "" : "mb-1"}`}
         aria-hidden
@@ -54,13 +82,16 @@ export function PremiumGate({
       <div
         className={`flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center ${variant === "panel" ? "sm:justify-center" : ""} pt-2`}
       >
-        <button
-          type="button"
-          onClick={onUnlock}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-base font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 sm:w-auto sm:text-sm"
-        >
-          Unlock Premium · {PREMIUM_PRICE_LABEL}
-        </button>
+        {resolvedActions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={action.onClick}
+            className={`inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-base font-bold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 sm:w-auto sm:text-sm ${accentClass(action.accent)}`}
+          >
+            {action.label}
+          </button>
+        ))}
         <span className="text-center text-[11px] text-slate-500 sm:text-left">
           Demo unlock · no payment
         </span>
