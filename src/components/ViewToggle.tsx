@@ -21,7 +21,7 @@ export function ViewToggle({
   entireSetLocked = false,
 }: Props) {
   const base =
-    "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50";
+    "flex min-h-11 flex-1 items-center justify-center rounded-lg px-3 py-3 text-base font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50 sm:text-sm";
   const active = "bg-amber-400 text-slate-950 shadow";
   const idle = "bg-transparent text-slate-200 hover:bg-white/5";
 
@@ -30,7 +30,7 @@ export function ViewToggle({
       <span className="text-xs font-semibold uppercase tracking-wider text-amber-200/70">
         View
       </span>
-      <div className="inline-flex rounded-xl border border-white/10 bg-slate-900/60 p-1 gap-1">
+      <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-slate-900/60 p-1">
         <button
           type="button"
           disabled={disabled}

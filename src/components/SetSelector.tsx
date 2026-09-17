@@ -11,12 +11,12 @@ type Props = {
 
 export function SetSelector({ sets, value, onChange, disabled }: Props) {
   return (
-    <label className="flex flex-col gap-1.5 min-w-0 flex-1">
+    <label className="flex min-w-0 flex-1 flex-col gap-1.5">
       <span className="text-xs font-semibold uppercase tracking-wider text-amber-200/70">
         Pokémon TCG Set
       </span>
       <select
-        className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2.5 text-sm text-white shadow-inner outline-none ring-amber-400/40 focus:ring-2 disabled:opacity-50"
+        className="min-h-11 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-3 text-base text-white shadow-inner outline-none ring-amber-400/40 focus:ring-2 disabled:opacity-50 sm:text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled || sets.length === 0}

@@ -159,7 +159,7 @@ export function ChaseApp() {
   })();
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300/80">
@@ -184,7 +184,7 @@ export function ChaseApp() {
                 <button
                   type="button"
                   onClick={unlockPremium}
-                  className="rounded-full bg-amber-400 px-3 py-1 text-[11px] font-bold text-slate-950 shadow hover:bg-amber-300"
+                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
                 >
                   Unlock Premium · {PREMIUM_PRICE_LABEL}
                 </button>
@@ -198,16 +198,19 @@ export function ChaseApp() {
         <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
           Pick a set, then toggle between{" "}
           <strong className="font-semibold text-amber-200">chase cards</strong>{" "}
-          (top 20% by TCGPlayer market price among cards with a usable price,
-          rounded up) and the entire set. Free shows the{" "}
+          (top 20% by market price) and the entire set. Free shows the{" "}
           <strong className="font-semibold text-amber-200">top 3 chase</strong>
           ; Premium ({PREMIUM_PRICE_LABEL}) unlocks the full chase list and
-          entire set. Prices come live from the Pokémon TCG API, with a TCGdex
-          fallback when primary prices are missing — nothing is invented.
+          entire set.
+          <span className="hidden sm:inline">
+            {" "}
+            Prices come live from the Pokémon TCG API, with a TCGdex fallback
+            when primary prices are missing — nothing is invented.
+          </span>
         </p>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-5">
+      <section className="sticky top-0 z-20 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
         {setsLoading ? (
           <StatusPanel variant="loading" title="Loading sets…" message="Fetching set list from the Pokémon TCG API." />
         ) : setsError ? (
@@ -325,7 +328,7 @@ export function ChaseApp() {
                     </p>
                   ) : null}
                   {displayed.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                       {displayed.map((card, i) => (
                         <CardTile
                           key={card.id}
@@ -347,7 +350,7 @@ export function ChaseApp() {
                         </p>
                       </div>
                       {lockedTeasers.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                           {lockedTeasers.map((card, i) => (
                             <CardTile
                               key={`locked-${card.id}`}
@@ -373,7 +376,7 @@ export function ChaseApp() {
         </section>
       )}
 
-      <footer className="border-t border-white/5 pt-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-white/5 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-slate-500">
         Data © Pokémon / The Pokémon Company International · Market prices via{" "}
         <a
           className="text-amber-300/80 underline-offset-2 hover:underline"

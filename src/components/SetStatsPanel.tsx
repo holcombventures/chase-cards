@@ -46,7 +46,7 @@ function MetricCard({
         : "text-amber-200";
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-white/10 bg-slate-950/50 px-3.5 py-3 sm:px-4">
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-3 sm:px-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
         {label}
       </p>
@@ -86,7 +86,7 @@ export function SetStatsPanel({ stats, setName }: Props) {
           Free + Premium · sources labeled on every metric
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
         <MetricCard label="Total set value" metric={stats.totalSetValue} />
         <MetricCard label="Month-over-month" metric={stats.mom} />
         <MetricCard label="Year-over-year" metric={stats.yoy} />

@@ -51,15 +51,19 @@ export function PremiumGate({
           <span>Entire set view for every card</span>
         </li>
       </ul>
-      <div className={`flex flex-wrap items-center gap-3 ${variant === "panel" ? "justify-center" : ""} pt-2`}>
+      <div
+        className={`flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center ${variant === "panel" ? "sm:justify-center" : ""} pt-2`}
+      >
         <button
           type="button"
           onClick={onUnlock}
-          className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-base font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 sm:w-auto sm:text-sm"
         >
           Unlock Premium · {PREMIUM_PRICE_LABEL}
         </button>
-        <span className="text-[11px] text-slate-500">Demo unlock · no payment</span>
+        <span className="text-center text-[11px] text-slate-500 sm:text-left">
+          Demo unlock · no payment
+        </span>
       </div>
     </div>
   );
