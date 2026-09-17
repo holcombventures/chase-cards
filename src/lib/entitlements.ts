@@ -7,6 +7,9 @@
  * - Category add-on $1.99 each — one-piece | mtg | sports
  * - All Access $29.99 — all live categories (+ treat as owning those add-ons)
  *
+ * Freemium browse: live categories (Pokémon, One Piece) allow free top-3 chase.
+ * Full depth for One Piece requires Premium + one-piece add-on, or All Access.
+ *
  * Migrates legacy `chase-cards-premium` === "1" into the new store.
  */
 
@@ -147,9 +150,10 @@ export function hasPremiumAccess(state: EntitlementsState): boolean {
 }
 
 /**
- * Whether the user owns a category for selection / future catalog access.
- * - Pokémon: always "owned" for browsing (freemium depth applies separately)
- * - Others: add-on in `categories`, or All Access (which also unlocks live add-ons)
+ * Whether the user owns a category for full (paid) depth.
+ * - Pokémon: always "owned" (Premium alone unlocks full Pokémon depth)
+ * - One Piece / others: add-on in `categories`, or All Access
+ * Free users may still browse live catalogs with FREE_CHASE_LIMIT (top 3).
  */
 export function ownsCategory(
   state: EntitlementsState,
@@ -161,16 +165,19 @@ export function ownsCategory(
 }
 
 /**
- * Premium depth for Pokémon (or a live owned category later).
- * Free users: false → top-3 chase only on Pokémon.
+ * Full chase + entire set for a live category.
+ * - Pokémon: Premium (or All Access)
+ * - One Piece: Premium + one-piece add-on, or All Access
+ * Free users: false → top-3 chase only on live catalogs.
  */
 export function hasFullAccessInCategory(
   state: EntitlementsState,
   categoryId: CategoryId,
 ): boolean {
+  if (!isLiveCategory(categoryId)) return false;
   if (!hasPremiumAccess(state)) return false;
   if (categoryId === "pokemon") return true;
-  return ownsCategory(state, categoryId) && isLiveCategory(categoryId);
+  return ownsCategory(state, categoryId);
 }
 
 export function unlockPremiumState(

@@ -12,9 +12,12 @@ import { selectChaseCards, sortBySetNumber } from "@/lib/prices";
 import {
   DEFAULT_CATEGORY_ID,
   getCategory,
+  isLiveCategory,
   type CategoryId,
 } from "@/lib/catalog/types";
 import {
+  ADDON_PRICE_LABEL,
+  ALL_ACCESS_PRICE_LABEL,
   FREE_CHASE_LIMIT,
   PREMIUM_PRICE_LABEL,
   categoryEntitlementHint,
@@ -25,7 +28,7 @@ import { SetSelector } from "./SetSelector";
 import { ViewToggle } from "./ViewToggle";
 import { CardTile } from "./CardTile";
 import { StatusPanel } from "./StatusPanel";
-import { PremiumGate } from "./PremiumGate";
+import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
 import { EntitlementShop } from "./EntitlementShop";
@@ -48,9 +51,12 @@ export function ChaseApp() {
 
   const [categoryId, setCategoryId] = useState<CategoryId>(DEFAULT_CATEGORY_ID);
   const category = getCategory(categoryId);
+  const catalogLive = isLiveCategory(categoryId);
   const isPokemon = categoryId === "pokemon";
+  const isOnePiece = categoryId === "one-piece";
   const fullAccessHere = hasFullAccessInCategory(categoryId);
   const categoryHint = categoryEntitlementHint(entitlements, categoryId);
+  const ownsThis = ownsCategory(categoryId);
 
   const ownedIds = useMemo(() => {
     const ids: CategoryId[] = ["pokemon"];
@@ -78,13 +84,16 @@ export function ChaseApp() {
   const [cardsLoading, setCardsLoading] = useState(false);
   const [cardsError, setCardsError] = useState<string | null>(null);
   const [pricedCount, setPricedCount] = useState(0);
-  const [priceSource, setPriceSource] = useState<CardsMetaPriceSource | null>(null);
+  const [priceSource, setPriceSource] = useState<CardsMetaPriceSource | null>(
+    null,
+  );
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [setStats, setSetStats] = useState<SetStats | null>(null);
 
-  // Only load Pokémon sets when Pokémon is selected
+  // Load sets for the selected live catalog
   useEffect(() => {
-    if (!isPokemon) {
+    if (!catalogLive) {
+      setSets([]);
       setSetsLoading(false);
       setSetsError(null);
       return;
@@ -93,8 +102,11 @@ export function ChaseApp() {
     (async () => {
       setSetsLoading(true);
       setSetsError(null);
+      setSets([]);
       try {
-        const res = await fetch("/api/sets");
+        const res = await fetch(
+          `/api/sets?category=${encodeURIComponent(categoryId)}`,
+        );
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || "Failed to load sets.");
         if (!cancelled) setSets(body.data as PokemonSet[]);
@@ -109,51 +121,58 @@ export function ChaseApp() {
     return () => {
       cancelled = true;
     };
-  }, [isPokemon]);
+  }, [catalogLive, categoryId]);
 
-  const loadCards = useCallback(async (id: string, releaseDate?: string | null) => {
-    if (!id) {
-      setCards([]);
-      setPricedCount(0);
-      setPriceSource(null);
-      setFallbackUsed(false);
-      setSetStats(null);
+  const loadCards = useCallback(
+    async (
+      id: string,
+      cat: CategoryId,
+      releaseDate?: string | null,
+    ) => {
+      if (!id || !isLiveCategory(cat)) {
+        setCards([]);
+        setPricedCount(0);
+        setPriceSource(null);
+        setFallbackUsed(false);
+        setSetStats(null);
+        setCardsError(null);
+        return;
+      }
+      setCardsLoading(true);
       setCardsError(null);
-      return;
-    }
-    setCardsLoading(true);
-    setCardsError(null);
-    setSetStats(null);
-    try {
-      const qs = new URLSearchParams();
-      if (releaseDate) qs.set("releaseDate", releaseDate);
-      const q = qs.toString();
-      const res = await fetch(
-        `/api/sets/${encodeURIComponent(id)}/cards${q ? `?${q}` : ""}`
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Failed to load cards.");
-      setCards(body.data as CardWithPrice[]);
-      setPricedCount(body.meta?.pricedCount ?? 0);
-      setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
-      setFallbackUsed(Boolean(body.meta?.fallbackUsed));
-      setSetStats((body.meta?.stats as SetStats) ?? null);
-    } catch (e) {
-      setCards([]);
-      setPricedCount(0);
-      setPriceSource(null);
-      setFallbackUsed(false);
       setSetStats(null);
-      setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
-    } finally {
-      setCardsLoading(false);
-    }
-  }, []);
+      try {
+        const qs = new URLSearchParams();
+        qs.set("category", cat);
+        if (releaseDate) qs.set("releaseDate", releaseDate);
+        const res = await fetch(
+          `/api/sets/${encodeURIComponent(id)}/cards?${qs.toString()}`,
+        );
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || "Failed to load cards.");
+        setCards(body.data as CardWithPrice[]);
+        setPricedCount(body.meta?.pricedCount ?? 0);
+        setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
+        setFallbackUsed(Boolean(body.meta?.fallbackUsed));
+        setSetStats((body.meta?.stats as SetStats) ?? null);
+      } catch (e) {
+        setCards([]);
+        setPricedCount(0);
+        setPriceSource(null);
+        setFallbackUsed(false);
+        setSetStats(null);
+        setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
+      } finally {
+        setCardsLoading(false);
+      }
+    },
+    [],
+  );
 
   const selectedSet = sets.find((s) => s.id === setId);
 
   useEffect(() => {
-    if (!isPokemon) {
+    if (!catalogLive) {
       setCards([]);
       setPricedCount(0);
       setPriceSource(null);
@@ -163,15 +182,25 @@ export function ChaseApp() {
       setCardsLoading(false);
       return;
     }
-    void loadCards(setId, selectedSet?.releaseDate ?? null);
-  }, [isPokemon, setId, selectedSet?.releaseDate, loadCards]);
+    void loadCards(setId, categoryId, selectedSet?.releaseDate ?? null);
+  }, [
+    catalogLive,
+    categoryId,
+    setId,
+    selectedSet?.releaseDate,
+    loadCards,
+  ]);
 
   const handleCategoryChange = useCallback((id: CategoryId) => {
     setCategoryId(id);
-    if (id !== "pokemon") {
-      setSetId("");
-      setMode("chase");
-    }
+    setSetId("");
+    setMode("chase");
+    setCards([]);
+    setPricedCount(0);
+    setPriceSource(null);
+    setFallbackUsed(false);
+    setSetStats(null);
+    setCardsError(null);
   }, []);
 
   const chaseCards = useMemo(() => selectChaseCards(cards), [cards]);
@@ -193,9 +222,9 @@ export function ChaseApp() {
   const lockedChaseCount = lockedChaseRemainder.length;
   const totalInSet = cards.length;
   const showFreeChaseSoftLock =
-    isPokemon && !fullAccessHere && mode === "chase" && lockedChaseCount > 0;
+    catalogLive && !fullAccessHere && mode === "chase" && lockedChaseCount > 0;
   const showEntireSetPaywall =
-    isPokemon && !fullAccessHere && mode === "all";
+    catalogLive && !fullAccessHere && mode === "all";
 
   const displayed = fullAccessHere
     ? mode === "chase"
@@ -206,10 +235,82 @@ export function ChaseApp() {
       : [];
 
   const showTcgdexNote =
-    fallbackUsed || priceSource === "tcgdex" || priceSource === "mixed";
+    isPokemon &&
+    (fallbackUsed || priceSource === "tcgdex" || priceSource === "mixed");
+
+  const showOnePiecePriceNote =
+    isOnePiece &&
+    (priceSource === "optcg" || priceSource === "optcgapi");
+
+  const unlockActions: GateAction[] = useMemo(() => {
+    if (isPokemon) {
+      return [
+        {
+          label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
+          onClick: unlockPremium,
+          accent: "amber",
+        },
+      ];
+    }
+    // One Piece (and future live add-on categories): Premium + add-on, or All Access
+    const actions: GateAction[] = [];
+    if (!isPremium) {
+      actions.push({
+        label: `Premium · ${PREMIUM_PRICE_LABEL}`,
+        onClick: unlockPremium,
+        accent: "amber",
+      });
+    }
+    if (!ownsThis) {
+      actions.push({
+        label: `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`,
+        onClick: () => unlockAddon(categoryId),
+        accent: "sky",
+      });
+    }
+    if (!entitlements.allAccess) {
+      actions.push({
+        label: `All Access · ${ALL_ACCESS_PRICE_LABEL}`,
+        onClick: unlockAllAccess,
+        accent: "violet",
+      });
+    }
+    if (actions.length === 0) {
+      actions.push({
+        label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
+        onClick: unlockPremium,
+        accent: "amber",
+      });
+    }
+    return actions;
+  }, [
+    isPokemon,
+    isPremium,
+    ownsThis,
+    category.shortLabel,
+    category.priceLabel,
+    categoryId,
+    entitlements.allAccess,
+    unlockPremium,
+    unlockAddon,
+    unlockAllAccess,
+  ]);
+
+  const unlockMessage = (() => {
+    if (isPokemon) {
+      return `Unlock Premium for ${PREMIUM_PRICE_LABEL} to see the remaining chase cards (full top 20%) and browse the entire set.`;
+    }
+    if (isPremium && !ownsThis) {
+      return `Premium is active — unlock the ${category.shortLabel} add-on (${category.priceLabel}) or All Access to open full chase + entire set for ${category.label}.`;
+    }
+    if (!isPremium && ownsThis) {
+      return `${category.shortLabel} add-on is owned — unlock Premium (${PREMIUM_PRICE_LABEL}) or All Access for full chase + entire set.`;
+    }
+    return `Free shows top ${FREE_CHASE_LIMIT} chase. Full ${category.shortLabel} chase + entire set needs Premium (${PREMIUM_PRICE_LABEL}) + ${category.shortLabel} add-on (${category.priceLabel}), or All Access (${ALL_ACCESS_PRICE_LABEL}).`;
+  })();
 
   const chaseSubtitle = (() => {
-    if (!isPokemon || !setId || cardsLoading || cardsError) return null;
+    if (!catalogLive || !setId || cardsLoading || cardsError) return null;
     if (fullAccessHere) {
       return mode === "chase"
         ? ` · showing top ${chaseCards.length} (≤20%, rounded up)`
@@ -219,16 +320,34 @@ export function ChaseApp() {
       const shown = Math.min(FREE_CHASE_LIMIT, chaseCards.length);
       return ` · Top ${shown} chase (free) · ${chaseCards.length} chase total`;
     }
-    return " · Premium required";
+    return " · Full access required";
   })();
+
+  const setPickerLabel = isPokemon
+    ? "Pokémon TCG Set"
+    : isOnePiece
+      ? "One Piece English Set"
+      : `${category.shortLabel} Set`;
+
+  const loadingSetsMessage = isPokemon
+    ? "Fetching set list from the Pokémon TCG API."
+    : isOnePiece
+      ? "Fetching One Piece English sets."
+      : `Fetching ${category.label} sets.`;
+
+  const loadingCardsMessage = isPokemon
+    ? "Fetching cards and market prices (Pokémon TCG API, with TCGdex fallback if needed)."
+    : isOnePiece
+      ? "Fetching One Piece cards and USD market prices."
+      : `Fetching ${category.label} cards.`;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300/80">
-            {isPokemon
-              ? "Pokémon TCG · Market chase"
+            {catalogLive
+              ? `${category.label} · Market chase`
               : `${category.label} · Coming soon`}
           </p>
           {entitlementsReady ? (
@@ -263,13 +382,16 @@ export function ChaseApp() {
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
           Same chase experience across categories.{" "}
-          <strong className="font-semibold text-amber-200">Pokémon</strong> is
-          live today — free shows the{" "}
-          <strong className="font-semibold text-amber-200">top 3 chase</strong>;
-          Premium ({PREMIUM_PRICE_LABEL}) unlocks full chase + entire set.
-          One Piece, MTG, and Sports are selectable now with coming-soon
-          catalogs; add-ons ({"$1.99"}) or All Access ({"$29.99"}) reserve
-          entitlement for when they go live.
+          <strong className="font-semibold text-amber-200">Pokémon</strong> and{" "}
+          <strong className="font-semibold text-amber-200">
+            One Piece English
+          </strong>{" "}
+          are live — free shows the{" "}
+          <strong className="font-semibold text-amber-200">top 3 chase</strong>.
+          Premium ({PREMIUM_PRICE_LABEL}) unlocks full Pokémon chase + entire
+          set. One Piece full depth needs Premium + the One Piece add-on (
+          {"$1.99"}) or All Access ({"$29.99"}). MTG and Sports remain
+          coming-soon.
         </p>
       </header>
 
@@ -278,15 +400,15 @@ export function ChaseApp() {
           value={categoryId}
           onChange={handleCategoryChange}
           ownedIds={ownedIds}
-          disabled={isPokemon && cardsLoading}
+          disabled={catalogLive && cardsLoading}
         />
 
-        {isPokemon ? (
+        {catalogLive ? (
           setsLoading ? (
             <StatusPanel
               variant="loading"
               title="Loading sets…"
-              message="Fetching set list from the Pokémon TCG API."
+              message={loadingSetsMessage}
             />
           ) : setsError ? (
             <StatusPanel
@@ -307,6 +429,7 @@ export function ChaseApp() {
                 value={setId}
                 onChange={setSetId}
                 disabled={cardsLoading}
+                label={setPickerLabel}
               />
               <ViewToggle
                 mode={mode}
@@ -327,13 +450,13 @@ export function ChaseApp() {
         ) : null}
       </section>
 
-      {/* Non-Pokémon: coming soon + entitlement CTAs (no Pokémon API calls) */}
-      {!isPokemon ? (
+      {/* Coming-soon categories: entitlement CTAs only */}
+      {!catalogLive ? (
         <section className="space-y-4">
           <ComingSoonCategoryPanel
             categoryId={categoryId}
             hint={categoryHint}
-            ownsThis={ownsCategory(categoryId)}
+            ownsThis={ownsThis}
             hasPremium={isPremium}
             onUnlockAddon={() => unlockAddon(categoryId)}
             onUnlockAllAccess={unlockAllAccess}
@@ -345,26 +468,24 @@ export function ChaseApp() {
             onUnlockAddon={unlockAddon}
             onUnlockAllAccess={unlockAllAccess}
             onRestoreFree={restoreFree}
-            highlightAddon={
-              !ownsCategory(categoryId) ? categoryId : null
-            }
+            highlightAddon={!ownsThis ? categoryId : null}
           />
         </section>
       ) : null}
 
-      {isPokemon && !setsLoading && !setsError ? (
+      {catalogLive && !setsLoading && !setsError ? (
         <section className="space-y-4">
           {!setId ? (
             <StatusPanel
               variant="empty"
               title="Choose a set to begin"
-              message="Select a Pokémon TCG set above to load cards and market prices."
+              message={`Select a ${category.label} set above to load cards and market prices.`}
             />
           ) : cardsLoading ? (
             <StatusPanel
               variant="loading"
               title={`Loading ${selectedSet?.name ?? "set"}…`}
-              message="Fetching cards and market prices (Pokémon TCG API, with TCGdex fallback if needed)."
+              message={loadingCardsMessage}
             />
           ) : cardsError ? (
             <StatusPanel
@@ -389,9 +510,9 @@ export function ChaseApp() {
                   variant="empty"
                   title="No chase cards"
                   message={
-                    fallbackUsed
+                    isPokemon && fallbackUsed
                       ? `This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but neither the Pokémon TCG API nor TCGdex returned a usable TCGPlayer market price. Switch to Entire set to browse them, or try another set.`
-                      : `This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but none have a usable TCGPlayer market price. Switch to Entire set to browse them, or try another set.`
+                      : `This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but none have a usable market price. Switch to Entire set to browse them, or try another set.`
                   }
                 />
               ) : showEntireSetPaywall ? (
@@ -406,14 +527,18 @@ export function ChaseApp() {
                       ) : null}
                     </h2>
                     <p className="text-xs text-slate-400">
-                      {totalInSet} cards in set · Premium unlocks full grid
+                      {totalInSet} cards in set · full access unlocks grid
                     </p>
                   </div>
                   <PremiumGate
                     variant="panel"
                     title={`${totalInSet} cards in this set`}
-                    message={`Entire set view is a Premium feature (${PREMIUM_PRICE_LABEL}). Unlock to browse every card sorted by set number — plus the full chase list (top 20%).`}
-                    onUnlock={unlockPremium}
+                    message={
+                      isPokemon
+                        ? `Entire set view is a Premium feature (${PREMIUM_PRICE_LABEL}). Unlock to browse every card sorted by set number — plus the full chase list (top 20%).`
+                        : unlockMessage
+                    }
+                    actions={unlockActions}
                   />
                 </>
               ) : (
@@ -442,6 +567,13 @@ export function ChaseApp() {
                       {priceSource === "mixed"
                         ? " · mixed with Pokémon TCG API"
                         : ""}
+                    </p>
+                  ) : null}
+                  {showOnePiecePriceNote ? (
+                    <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100/90">
+                      {priceSource === "optcg"
+                        ? "Prices via OPTCG API (USD)"
+                        : "Prices via optcgapi.com (market_price USD) · OPTCG key optional for primary host"}
                     </p>
                   ) : null}
                   {displayed.length > 0 ? (
@@ -482,8 +614,8 @@ export function ChaseApp() {
                       <PremiumGate
                         variant="inline"
                         title={`${lockedChaseCount} more chase · ${totalInSet} in set`}
-                        message={`Unlock Premium for ${PREMIUM_PRICE_LABEL} to see the remaining chase cards (full top 20%) and browse the entire set.`}
-                        onUnlock={unlockPremium}
+                        message={unlockMessage}
+                        actions={unlockActions}
                       />
                     </div>
                   ) : null}
@@ -494,8 +626,7 @@ export function ChaseApp() {
         </section>
       ) : null}
 
-      {/* Shop always available for demos (collapsed feel on Pokémon via footer link area) */}
-      {isPokemon && entitlementsReady ? (
+      {catalogLive && entitlementsReady ? (
         <EntitlementShop
           entitlements={entitlements}
           onUnlockPremium={unlockPremium}
@@ -503,33 +634,37 @@ export function ChaseApp() {
           onUnlockAllAccess={unlockAllAccess}
           onRestoreFree={restoreFree}
           compact
+          highlightAddon={
+            isOnePiece && !ownsThis ? "one-piece" : null
+          }
         />
       ) : null}
 
       <footer className="border-t border-white/5 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center text-xs text-slate-500">
-        Data © Pokémon / The Pokémon Company International · Market prices via{" "}
+        Pokémon data © The Pokémon Company International · One Piece English via{" "}
         <a
           className="text-amber-300/80 underline-offset-2 hover:underline"
-          href="https://docs.pokemontcg.io"
+          href="https://optcg-api.arjunbansal-ai.workers.dev"
           target="_blank"
           rel="noreferrer"
         >
-          Pokémon TCG API
+          OPTCG API
         </a>{" "}
-        (TCGPlayer when present), with{" "}
+        /{" "}
         <a
           className="text-amber-300/80 underline-offset-2 hover:underline"
-          href="https://tcgdex.dev"
+          href="https://optcgapi.com"
           target="_blank"
           rel="noreferrer"
         >
-          TCGdex
-        </a>{" "}
-        as fallback. Not affiliated with Nintendo or TPC.
+          optcgapi.com
+        </a>
+        . Market prices never invented. Not affiliated with Bandai, Nintendo, or
+        TPC.
         {entitlementsReady ? (
           <>
             {" "}
-            · Free: Pokémon top {FREE_CHASE_LIMIT} chase · Premium{" "}
+            · Free: top {FREE_CHASE_LIMIT} chase on live catalogs · Premium{" "}
             {PREMIUM_PRICE_LABEL} · Add-ons $1.99 · All Access $29.99 (demo, no
             payment).
           </>
@@ -573,7 +708,7 @@ function ComingSoonCategoryPanel({
         <p className="text-sm text-slate-300 opacity-90">
           Your entitlement is saved. The {cat.label} adapter isn’t live yet —
           sets and chase cards will appear here when the catalog ships. Pokémon
-          remains fully available.
+          and One Piece remain available.
         </p>
       </div>
     );
@@ -597,7 +732,7 @@ function ComingSoonCategoryPanel({
         {cat.priceLabel}) or <strong className="text-violet-200">All Access</strong>{" "}
         ($29.99) to reserve entitlement for when the catalog goes live.
         {hasPremium
-          ? " Premium covers Pokémon depth; other categories need an add-on or All Access."
+          ? " Premium covers Pokémon depth; One Piece full depth needs its add-on or All Access."
           : " Premium ($4.99) unlocks full Pokémon chase today."}
       </p>
       <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">

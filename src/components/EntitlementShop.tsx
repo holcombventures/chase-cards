@@ -60,7 +60,7 @@ export function EntitlementShop({
         <ShopCard
           title="Premium"
           price={PREMIUM_PRICE_LABEL}
-          description="Full chase (top 20%) + entire set in owned categories. Pokémon included."
+          description="Full chase (top 20%) + entire set in owned categories. Pokémon included; One Piece also needs its add-on (or All Access)."
           owned={entitlements.premium || entitlements.allAccess}
           ownedLabel={entitlements.allAccess ? "Included in All Access" : "Owned"}
           onClick={onUnlockPremium}
@@ -93,7 +93,7 @@ export function EntitlementShop({
               description={
                 cat.status === "coming_soon"
                   ? `Unlocks ${cat.label} when the catalog goes live. Adapter not live yet.`
-                  : `Unlocks ${cat.label} chase & set browsing.`
+                  : `With Premium (or All Access): full ${cat.label} chase + entire set. Free users already get top 3 chase.`
               }
               owned={owned}
               ownedLabel={

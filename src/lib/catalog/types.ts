@@ -1,6 +1,6 @@
 /**
- * Multi-category catalog config (Phase 2A).
- * Only Pokémon is live; other adapters are intentionally not wired yet.
+ * Multi-category catalog config.
+ * Pokémon + One Piece English are live; MTG / Sports remain coming soon.
  */
 
 export type CategoryId = "pokemon" | "one-piece" | "mtg" | "sports";
@@ -30,7 +30,7 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     label: "One Piece English",
     shortLabel: "One Piece",
     priceLabel: "$1.99",
-    status: "coming_soon",
+    status: "live",
   },
   {
     id: "mtg",
@@ -67,3 +67,12 @@ export function getCategory(id: CategoryId): CategoryConfig {
 export function isLiveCategory(id: CategoryId): boolean {
   return getCategory(id).status === "live";
 }
+
+export function isCategoryId(value: string): value is CategoryId {
+  return CATEGORIES.some((c) => c.id === value);
+}
+
+/** Live categories that ship a catalog adapter today. */
+export const LIVE_CATALOG_IDS: readonly CategoryId[] = CATEGORIES.filter(
+  (c) => c.status === "live",
+).map((c) => c.id);
