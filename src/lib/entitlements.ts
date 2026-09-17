@@ -4,7 +4,7 @@
  * Model:
  * - Premium $4.99 — full chase + entire set within owned categories.
  *   Pokémon counts as owned for Premium holders (and free users still get top-3 chase).
- * - Category add-on $1.99 each — one-piece | mtg | sports
+ * - Category add-on $2.99 each — one-piece | mtg | sports
  * - All Access $29.99 — all live categories (+ treat as owning those add-ons)
  *
  * Migrates legacy `chase-cards-premium` === "1" into the new store.
@@ -21,7 +21,7 @@ export const LEGACY_PREMIUM_STORAGE_KEY = "chase-cards-premium";
 export const ENTITLEMENTS_STORAGE_KEY = "chase-cards-entitlements";
 
 export const PREMIUM_PRICE_LABEL = "$4.99";
-export const ADDON_PRICE_LABEL = "$1.99";
+export const ADDON_PRICE_LABEL = "$2.99";
 export const ALL_ACCESS_PRICE_LABEL = "$29.99";
 export const FREE_CHASE_LIMIT = 3;
 

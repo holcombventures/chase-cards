@@ -268,7 +268,7 @@ export function ChaseApp() {
           <strong className="font-semibold text-amber-200">top 3 chase</strong>;
           Premium ({PREMIUM_PRICE_LABEL}) unlocks full chase + entire set.
           One Piece, MTG, and Sports are selectable now with coming-soon
-          catalogs; add-ons ({"$1.99"}) or All Access ({"$29.99"}) reserve
+          catalogs; add-ons ({"$2.99"}) or All Access ({"$29.99"}) reserve
           entitlement for when they go live.
         </p>
       </header>
@@ -530,7 +530,7 @@ export function ChaseApp() {
           <>
             {" "}
             · Free: Pokémon top {FREE_CHASE_LIMIT} chase · Premium{" "}
-            {PREMIUM_PRICE_LABEL} · Add-ons $1.99 · All Access $29.99 (demo, no
+            {PREMIUM_PRICE_LABEL} · Add-ons $2.99 · All Access $29.99 (demo, no
             payment).
           </>
         ) : null}
