@@ -6,20 +6,25 @@ import {
   ENTITLEMENTS_STORAGE_KEY,
   EMPTY_ENTITLEMENTS,
   LEGACY_PREMIUM_STORAGE_KEY,
+  applyCheckoutEntitlements,
   clearEntitlements,
   hasFullAccessInCategory,
   hasPremiumAccess,
   ownsCategory,
+  ownsSport,
   readEntitlements,
   unlockAddonState,
   unlockAllAccessState,
   unlockPremiumState,
+  unlockSportState,
   writeEntitlements,
+  type CheckoutEntitlementKey,
   type EntitlementsState,
+  type SportAddonId,
 } from "@/lib/entitlements";
 
 /**
- * Demo entitlements hook — localStorage only.
+ * Entitlements hook — localStorage + optional Stripe confirm grants.
  * Migrates legacy `chase-cards-premium` on first read.
  */
 export function useEntitlements() {
@@ -64,9 +69,26 @@ export function useEntitlements() {
     [persist],
   );
 
+  const unlockSport = useCallback(
+    (sportId: SportAddonId) => {
+      persist(unlockSportState(readEntitlements(), sportId));
+    },
+    [persist],
+  );
+
   const unlockAllAccess = useCallback(() => {
     persist(unlockAllAccessState());
   }, [persist]);
+
+  const applyPaidEntitlements = useCallback(
+    (keys: CheckoutEntitlementKey[]) => {
+      if (!keys.length) return readEntitlements();
+      const next = applyCheckoutEntitlements(readEntitlements(), keys);
+      persist(next);
+      return readEntitlements();
+    },
+    [persist],
+  );
 
   const restoreFree = useCallback(() => {
     clearEntitlements();
@@ -80,11 +102,14 @@ export function useEntitlements() {
     ready,
     isPremium,
     ownsCategory: (id: CategoryId) => ownsCategory(entitlements, id),
+    ownsSport: (id: SportAddonId) => ownsSport(entitlements, id),
     hasFullAccessInCategory: (id: CategoryId) =>
       hasFullAccessInCategory(entitlements, id),
     unlockPremium,
     unlockAddon,
+    unlockSport,
     unlockAllAccess,
+    applyPaidEntitlements,
     restoreFree,
   };
 }

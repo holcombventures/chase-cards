@@ -29,6 +29,9 @@ import { PremiumGate } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
 import { EntitlementShop } from "./EntitlementShop";
+import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
+import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
+import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
@@ -42,9 +45,87 @@ export function ChaseApp() {
     hasFullAccessInCategory,
     unlockPremium,
     unlockAddon,
+    unlockSport,
     unlockAllAccess,
+    applyPaidEntitlements,
     restoreFree,
   } = useEntitlements();
+
+  const [checkoutBanner, setCheckoutBanner] = useState<string | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+
+  // After Stripe redirect: ?checkout=success&session_id=… → confirm + grant
+  useEffect(() => {
+    if (!entitlementsReady || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (!checkout) return;
+
+    const cleanUrl = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("checkout");
+      url.searchParams.delete("session_id");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    };
+
+    if (checkout === "cancel") {
+      setCheckoutBanner("Checkout canceled — no charge was made.");
+      cleanUrl();
+      return;
+    }
+
+    if (checkout !== "success") return;
+    const sessionId = params.get("session_id")?.trim();
+    if (!sessionId) {
+      setCheckoutBanner("Checkout returned without a session id.");
+      cleanUrl();
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setCheckoutBusy(true);
+      const result = await confirmCheckoutSession(sessionId);
+      if (cancelled) return;
+      if (result.paid && result.entitlements.length) {
+        const keys = result.entitlements.filter(isCheckoutEntitlementKey);
+        applyPaidEntitlements(keys);
+        setCheckoutBanner(
+          keys.length
+            ? `Payment confirmed — unlocked ${keys.join(", ").replace(/_/g, " ")}.`
+            : "Payment confirmed.",
+        );
+      } else if (result.paid) {
+        setCheckoutBanner(
+          "Payment confirmed, but no matching price→entitlement mapping was found. Check Netlify STRIPE_PRICE_* env vars.",
+        );
+      } else {
+        setCheckoutBanner(
+          result.error || "Payment not confirmed yet. Try refreshing in a moment.",
+        );
+      }
+      cleanUrl();
+      setCheckoutBusy(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entitlementsReady, applyPaidEntitlements]);
+
+  const buyPremium = useCallback(async () => {
+    setCheckoutBusy(true);
+    try {
+      await purchaseEntitlement("premium", {
+        onDemoFallback: unlockPremium,
+        onStatus: (msg) => {
+          if (msg && msg !== "Starting checkout…") setCheckoutBanner(msg);
+        },
+      });
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [unlockPremium]);
 
   const [categoryId, setCategoryId] = useState<CategoryId>(DEFAULT_CATEGORY_ID);
   const category = getCategory(categoryId);
@@ -249,8 +330,9 @@ export function ChaseApp() {
               ) : (
                 <button
                   type="button"
-                  onClick={unlockPremium}
-                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
+                  onClick={() => void buyPremium()}
+                  disabled={checkoutBusy}
+                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
                 >
                   Unlock Premium · {PREMIUM_PRICE_LABEL}
                 </button>
@@ -272,6 +354,22 @@ export function ChaseApp() {
           entitlement for when they go live.
         </p>
       </header>
+
+      {checkoutBanner ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-400/30 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100"
+          role="status"
+        >
+          <span>{checkoutBusy ? "Confirming payment…" : checkoutBanner}</span>
+          <button
+            type="button"
+            className="text-xs text-emerald-200/80 underline-offset-2 hover:underline"
+            onClick={() => setCheckoutBanner(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       <section className="sticky top-0 z-20 space-y-4 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
         <CategorySwitcher
@@ -343,6 +441,7 @@ export function ChaseApp() {
             entitlements={entitlements}
             onUnlockPremium={unlockPremium}
             onUnlockAddon={unlockAddon}
+            onUnlockSport={unlockSport}
             onUnlockAllAccess={unlockAllAccess}
             onRestoreFree={restoreFree}
             highlightAddon={
@@ -500,6 +599,7 @@ export function ChaseApp() {
           entitlements={entitlements}
           onUnlockPremium={unlockPremium}
           onUnlockAddon={unlockAddon}
+          onUnlockSport={unlockSport}
           onUnlockAllAccess={unlockAllAccess}
           onRestoreFree={restoreFree}
           compact
@@ -557,6 +657,19 @@ function ComingSoonCategoryPanel({
   onUnlockPremium: () => void;
 }) {
   const cat = getCategory(categoryId);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const buy = async (
+    key: "premium" | "all_access" | "one-piece" | "mtg" | "sports",
+    demo: () => void,
+  ) => {
+    setBusy(key);
+    try {
+      await purchaseEntitlement(key, { onDemoFallback: demo });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (hint === "entitled_coming_soon" || ownsThis) {
     return (
@@ -578,6 +691,11 @@ function ComingSoonCategoryPanel({
       </div>
     );
   }
+
+  const addonKey =
+    categoryId === "one-piece" || categoryId === "mtg" || categoryId === "sports"
+      ? categoryId
+      : null;
 
   return (
     <div
@@ -601,31 +719,42 @@ function ComingSoonCategoryPanel({
           : " Premium ($4.99) unlocks full Pokémon chase today."}
       </p>
       <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
+        {addonKey ? (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void buy(addonKey, onUnlockAddon)}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-sky-300 disabled:opacity-60"
+          >
+            {busy === addonKey
+              ? "Working…"
+              : `Unlock ${cat.shortLabel} · ${cat.priceLabel}`}
+          </button>
+        ) : null}
         <button
           type="button"
-          onClick={onUnlockAddon}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-sky-300"
+          disabled={busy !== null}
+          onClick={() => void buy("all_access", onUnlockAllAccess)}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-violet-300 disabled:opacity-60"
         >
-          Unlock {cat.shortLabel} · {cat.priceLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onUnlockAllAccess}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-violet-300"
-        >
-          All Access · $29.99
+          {busy === "all_access" ? "Working…" : "All Access · $29.99"}
         </button>
         {!hasPremium ? (
           <button
             type="button"
-            onClick={onUnlockPremium}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-400/20"
+            disabled={busy !== null}
+            onClick={() => void buy("premium", onUnlockPremium)}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-400/20 disabled:opacity-60"
           >
-            Premium · {PREMIUM_PRICE_LABEL}
+            {busy === "premium"
+              ? "Working…"
+              : `Premium · ${PREMIUM_PRICE_LABEL}`}
           </button>
         ) : null}
       </div>
-      <span className="text-[11px] text-slate-500">Demo unlock · no payment</span>
+      <span className="text-[11px] text-slate-500">
+        Stripe when configured · demo unlock otherwise
+      </span>
     </div>
   );
 }
