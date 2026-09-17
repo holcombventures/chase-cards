@@ -60,7 +60,7 @@ export type ViewMode = "chase" | "all";
 export type SetStatMetric = {
   /** Display value, e.g. "$1,234.56", "+3.2%", or "N/A" */
   value: string;
-  /** Numeric percent for MoM/YoY when available (for up/down visual) */
+  /** Numeric percent for MoM when available (for up/down visual) */
   percent?: number | null;
   /** Direction for trend visuals */
   direction?: "up" | "down" | "flat" | null;
@@ -75,5 +75,4 @@ export type SetStatMetric = {
 export type SetStats = {
   totalSetValue: SetStatMetric;
   mom: SetStatMetric;
-  yoy: SetStatMetric;
 };

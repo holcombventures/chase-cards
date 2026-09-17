@@ -86,10 +86,9 @@ export function SetStatsPanel({ stats, setName }: Props) {
           Free + Premium · sources labeled on every metric
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
         <MetricCard label="Total set value" metric={stats.totalSetValue} />
         <MetricCard label="Month-over-month" metric={stats.mom} />
-        <MetricCard label="Year-over-year" metric={stats.yoy} />
       </div>
     </section>
   );

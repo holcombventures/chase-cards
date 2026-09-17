@@ -9,7 +9,6 @@ import { flattenCardmarketHits } from "./tcgdex";
 import { formatPrice } from "./prices";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const YOY_MIN_DAYS = 365;
 /** MoM needs ~30 days of set age; slight slack for new releases. */
 const MOM_MIN_DAYS = 28;
 
@@ -29,9 +28,6 @@ export function priceSourceLabel(source: CardsMetaPriceSource | null | undefined
 }
 
 const MOM_SOURCE = "Source: TCGdex (Cardmarket, ~30-day avg)";
-const YOY_SOURCE_INTENDED =
-  "Source: YoY would use historical market series (not available yet)";
-
 function parseReleaseDate(raw: string | null | undefined): Date | null {
   if (!raw || !raw.trim()) return null;
   // Accept YYYY/MM/DD (pokemontcg) or YYYY-MM-DD (tcgdex)
@@ -159,39 +155,6 @@ export function buildMomMetric(
   };
 }
 
-export function buildYoyMetric(releaseDate: string | null | undefined): SetStatMetric {
-  const ageDays = daysSinceRelease(releaseDate ?? null);
-
-  if (ageDays === null) {
-    return {
-      value: "N/A",
-      naReason: "Release date unknown",
-      source: YOY_SOURCE_INTENDED,
-      direction: null,
-      percent: null,
-    };
-  }
-
-  if (ageDays < YOY_MIN_DAYS) {
-    return {
-      value: "N/A",
-      naReason: "Set less than a year old",
-      source: YOY_SOURCE_INTENDED,
-      direction: null,
-      percent: null,
-    };
-  }
-
-  // Do not invent YoY — no reliable year-ago series is wired yet.
-  return {
-    value: "N/A",
-    naReason: "YoY history not available yet",
-    source: YOY_SOURCE_INTENDED,
-    direction: null,
-    percent: null,
-  };
-}
-
 export type BuildSetStatsInput = {
   cards: CardWithPrice[];
   priceSource: CardsMetaPriceSource;
@@ -218,6 +181,5 @@ export function buildSetStats(input: BuildSetStatsInput): SetStats {
       releaseDate,
       tcgdexAvailable: input.tcgdexAttempted === false ? false : tcgdexAvailable,
     }),
-    yoy: buildYoyMetric(releaseDate),
   };
 }

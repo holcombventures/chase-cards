@@ -14,7 +14,6 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
 - **Set statistics** (free + premium) — after a set loads, a stats panel shows:
   1. **Total set value** — sum of each card’s best usable TCGPlayer market price (USD), with a “based on N of M priced cards” note when some prices are missing
   2. **Month-over-month (MoM)** — percent change vs ~30-day Cardmarket averages via TCGdex (`avg`/`trend` vs `avg30`), or **N/A** with reason when data/age is insufficient
-  3. **Year-over-year (YoY)** — **N/A** when the set is under a year old or when no reliable YoY history exists (**never invented**)
   - **Every metric (including N/A) shows a visible source line** under the value
 - **Entitlements (demo localStorage)**:
   - **Free**: Pokémon only, top **3** chase (soft-lock remainder + Unlock Premium CTA)
@@ -45,7 +44,6 @@ Cards without market prices are excluded from chase ranking but still appear in 
 |---|---|---|
 | Total set value | Sum of best usable TCGPlayer market prices already used for chase | `Source: Pokémon TCG API (TCGPlayer)` / `Source: TCGdex (TCGPlayer)` / mixed |
 | MoM | Σ Cardmarket `avg` (else `trend`) vs Σ `avg30` on TCGdex; **N/A** if set &lt; ~30 days old or insufficient data | `Source: TCGdex (Cardmarket, ~30-day avg)` |
-| YoY | **N/A** if release date &lt; 365 days ago (“Set less than a year old”); otherwise **N/A** (“YoY history not available yet”) until a real history source is wired — **never invented** | Intended-source note on every N/A |
 
 Stats are returned in `GET /api/sets/[setId]/cards` `meta.stats` (and also available at `GET /api/sets/[setId]/stats`). TCGdex card bundles are cached in-memory so price fallback and MoM share one load when fallback already ran.
 
@@ -125,7 +123,7 @@ src/
     ChaseApp.tsx                   # Client app: category, set picker, freemium, shop
     CategorySwitcher.tsx           # Pokémon / One Piece / MTG / Sports
     EntitlementShop.tsx            # Premium / add-ons / All Access demo unlocks
-    SetStatsPanel.tsx              # Total / MoM / YoY with source lines
+    SetStatsPanel.tsx              # Total / MoM with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
     PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
     SetSelector.tsx
@@ -140,7 +138,7 @@ src/
     api.ts                         # Pokémon TCG API client
     tcgdex.ts                      # TCGdex set resolve + price/MoM fallback (cached)
     prices.ts                      # Market price + chase selection
-    stats.ts                       # Total / MoM / YoY builders
+    stats.ts                       # Total / MoM builders
     types.ts
 ```
 
