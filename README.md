@@ -1,9 +1,12 @@
-# Pokémon TCG Chase Cards
+# Chase Cards (Pokémon live · multi-category Phase 2A)
 
-A Next.js prototype for browsing Pokémon Trading Card Game sets and highlighting **chase cards** — the most valuable cards by live market price.
+A Next.js prototype for browsing TCG sets and highlighting **chase cards** — the most valuable cards by live market price.
+
+**Phase 2A:** same page with a **category** selector (Pokémon, One Piece English, Magic: The Gathering, Sports). Only **Pokémon** loads real sets/cards. Other categories are selectable with a clear coming-soon / entitlement CTA. Demo entitlements via localStorage (no Stripe yet).
 
 ## Features
 
+- **Category switcher** — Pokémon (live), One Piece English, MTG, Sports (coming soon)
 - Pick any Pokémon TCG set from the official API set list
 - Toggle between:
   1. **Chase cards** — top **20%** of cards in the set by market value (among cards with a usable market price; count is **rounded up**, minimum **1** if at least one priced card exists)
@@ -13,10 +16,14 @@ A Next.js prototype for browsing Pokémon Trading Card Game sets and highlightin
   2. **Month-over-month (MoM)** — percent change vs ~30-day Cardmarket averages via TCGdex (`avg`/`trend` vs `avg30`), or **N/A** with reason when data/age is insufficient
   3. **Year-over-year (YoY)** — **N/A** when the set is under a year old or when no reliable YoY history exists (**never invented**)
   - **Every metric (including N/A) shows a visible source line** under the value
-- **Freemium soft-lock (demo)**:
-  - **Free**: only the top **3** chase cards, labeled “Top 3 chase”, plus a locked remainder section with counts (e.g. “19 more chase · 122 in set”) and Unlock Premium **$4.99** CTA
-  - Free users who switch to **Entire set** see an upgrade gate (not the full grid)
-  - **Premium $4.99** (localStorage demo unlock, no Stripe): full chase list + entire set; header has “Restore free” for demos
+- **Entitlements (demo localStorage)**:
+  - **Free**: Pokémon only, top **3** chase (soft-lock remainder + Unlock Premium CTA)
+  - **Premium $4.99**: full chase (top 20%) + entire set within owned categories; Pokémon counts as owned for Premium holders
+  - **Category add-on $1.99** each (`one-piece`, `mtg`, `sports`): reserves entitlement for that category when it goes live
+  - **All Access $29.99** (permanent demo): Premium + all category add-ons; labeled clearly in the shop
+  - Non-Pokémon: even with All Access / add-on, show **“You’re entitled — catalog coming soon”** (adapter not live yet). Without entitlement, show paywall CTAs.
+  - Legacy `chase-cards-premium` key migrates into the new entitlements store
+  - Shop panel + **Restore free / clear entitlements** for testing
 - Each card tile shows: name, number/set info, labeled latest market price, and card photo (locked teasers blur name/price)
 - Loading, empty, and error states (including API rate limits)
 - **No invented prices** — if TCGPlayer market data is missing, the UI shows “Price unavailable”; if the API fails, a clear error is shown
@@ -59,6 +66,8 @@ Stats are returned in `GET /api/sets/[setId]/cards` `meta.stats` (and also avail
 - Set id mapping differs slightly (e.g. pokemontcg `me4` ↔ tcgdex `me04`, `me5` ↔ `me05`, `sv8` ↔ `sv08`); resolution prefers exact set **name** match, then id heuristics
 
 This app is **not** affiliated with Nintendo, The Pokémon Company, TCGPlayer, or TCGdex.
+
+**Not yet built (Phase 2B+):** One Piece / MTG / Sports data adapters.
 
 ## Stack
 
@@ -107,13 +116,15 @@ npm start
 ```
 src/
   app/
-    api/sets/                      # GET set list
+    api/sets/                      # GET set list (Pokémon)
     api/sets/[setId]/cards/        # GET cards + prices + meta.stats
     api/sets/[setId]/stats/        # GET set statistics only
     page.tsx                       # Home UI shell
     layout.tsx
   components/
-    ChaseApp.tsx                   # Client app: set picker, toggle, stats, freemium
+    ChaseApp.tsx                   # Client app: category, set picker, freemium, shop
+    CategorySwitcher.tsx           # Pokémon / One Piece / MTG / Sports
+    EntitlementShop.tsx            # Premium / add-ons / All Access demo unlocks
     SetStatsPanel.tsx              # Total / MoM / YoY with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
     PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
@@ -121,14 +132,27 @@ src/
     ViewToggle.tsx
     StatusPanel.tsx
   hooks/
-    usePremium.ts                  # localStorage premium flag (demo)
+    useEntitlements.ts             # Premium + add-ons + All Access (localStorage)
+    usePremium.ts                  # Thin compatibility wrapper → entitlements
   lib/
+    catalog/types.ts               # Category ids, labels, live | coming_soon
+    entitlements.ts                # Entitlement model + legacy premium migration
     api.ts                         # Pokémon TCG API client
     tcgdex.ts                      # TCGdex set resolve + price/MoM fallback (cached)
     prices.ts                      # Market price + chase selection
     stats.ts                       # Total / MoM / YoY builders
     types.ts
 ```
+
+## How to demo Phase 2A (chasecards.online)
+
+After Netlify deploys `main`:
+
+1. Open the site — category chips at the top of the controls.
+2. **Pokémon (Live)** — same freemium as before: top 3 chase free; Unlock Premium / shop for full chase + entire set.
+3. Switch to **One Piece / MTG / Sports** — no Pokémon API calls; see “Coming soon” + add-on / All Access CTAs.
+4. Demo-unlock an add-on or All Access → message becomes **“You’re entitled — catalog coming soon”**.
+5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
 
 ## License
 
