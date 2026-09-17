@@ -2,7 +2,7 @@
 
 A Next.js prototype for browsing TCG sets and highlighting **chase cards** — the most valuable cards by live market price.
 
-**Phase 2A:** same page with a **category** selector (Pokémon, One Piece English, Magic: The Gathering, Sports). Only **Pokémon** loads real sets/cards. Other categories are selectable with a clear coming-soon / entitlement CTA. Demo entitlements via localStorage (no Stripe yet).
+**Phase 2A:** same page with a **category** selector (Pokémon, One Piece English, Magic: The Gathering, Sports). Only **Pokémon** loads real sets/cards. Other categories are selectable with a clear coming-soon / entitlement CTA. Entitlements via localStorage; **Stripe Checkout** on branch `stripe-checkout` when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
 
 ## Features
 
@@ -91,6 +91,7 @@ cp .env.example .env.local
 | Variable | Required | Description |
 |---|---|---|
 | `POKEMONTCG_API_KEY` | No | API key from [dev.pokemontcg.io](https://dev.pokemontcg.io). Without it, public access is used and rate limits are stricter. If you hit HTTP 429, add a key and restart. |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_*` | No (demo fallback) | See [STRIPE.md](./STRIPE.md) for full Stripe Checkout env list and Netlify checklist. |
 
 ## Run
 
@@ -117,12 +118,15 @@ src/
     api/sets/                      # GET set list (Pokémon)
     api/sets/[setId]/cards/        # GET cards + prices + meta.stats
     api/sets/[setId]/stats/        # GET set statistics only
+    api/stripe/checkout/           # POST create Checkout Session
+    api/stripe/confirm/            # GET verify paid session → entitlements
+    api/stripe/webhook/            # POST optional checkout.session.completed
     page.tsx                       # Home UI shell
     layout.tsx
   components/
     ChaseApp.tsx                   # Client app: category, set picker, freemium, shop
     CategorySwitcher.tsx           # Pokémon / One Piece / MTG / Sports
-    EntitlementShop.tsx            # Premium / add-ons / All Access demo unlocks
+    EntitlementShop.tsx            # Premium / add-ons / sports / All Access (Stripe + demo)
     SetStatsPanel.tsx              # Total / MoM with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
     PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
@@ -134,7 +138,8 @@ src/
     usePremium.ts                  # Thin compatibility wrapper → entitlements
   lib/
     catalog/types.ts               # Category ids, labels, live | coming_soon
-    entitlements.ts                # Entitlement model + legacy premium migration
+    entitlements.ts                # Entitlement model + sports add-ons + Stripe grants
+    stripe/                        # Price map, Checkout helpers, session → entitlements
     api.ts                         # Pokémon TCG API client
     tcgdex.ts                      # TCGdex set resolve + price/MoM fallback (cached)
     prices.ts                      # Market price + chase selection
@@ -151,6 +156,10 @@ After Netlify deploys `main`:
 3. Switch to **One Piece / MTG / Sports** — no Pokémon API calls; see “Coming soon” + add-on / All Access CTAs.
 4. Demo-unlock an add-on or All Access → message becomes **“You’re entitled — catalog coming soon”**.
 5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
+
+## Stripe Checkout
+
+Documented in **[STRIPE.md](./STRIPE.md)**. Branch `stripe-checkout` wires `POST /api/stripe/checkout`, `GET /api/stripe/confirm`, and optional webhook. Live `main` stays unchanged until you merge.
 
 ## License
 

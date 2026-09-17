@@ -1,11 +1,13 @@
 /**
- * Demo entitlements (localStorage only — no Stripe yet).
+ * Entitlements (localStorage; Stripe Checkout grants via confirm).
  *
  * Model:
  * - Premium $4.99 — full chase + entire set within owned categories.
  *   Pokémon counts as owned for Premium holders (and free users still get top-3 chase).
  * - Category add-on $2.99 each — one-piece | mtg | sports
- * - All Access $29.99 — all live categories (+ treat as owning those add-ons)
+ * - Per-sport add-ons — baseball | basketball | football | hockey | soccer
+ *   (generic `sports` category stays coming_soon until Phase sports adapters exist)
+ * - All Access $29.99 — all live categories + all sport add-ons
  *
  * Migrates legacy `chase-cards-premium` === "1" into the new store.
  */
@@ -16,6 +18,12 @@ import {
   getCategory,
   isLiveCategory,
 } from "@/lib/catalog/types";
+import {
+  SPORT_ADDON_IDS,
+  sportIdFromEntitlement,
+  type CheckoutEntitlementKey,
+  type SportAddonId,
+} from "@/lib/stripe/catalog";
 
 export const LEGACY_PREMIUM_STORAGE_KEY = "chase-cards-premium";
 export const ENTITLEMENTS_STORAGE_KEY = "chase-cards-entitlements";
@@ -30,12 +38,15 @@ export type EntitlementsState = {
   allAccess: boolean;
   /** Owned category add-ons (never includes pokemon — Premium covers it) */
   categories: CategoryId[];
+  /** Per-sport add-ons for future sports adapters */
+  sports: SportAddonId[];
 };
 
 export const EMPTY_ENTITLEMENTS: EntitlementsState = {
   premium: false,
   allAccess: false,
   categories: [],
+  sports: [],
 };
 
 function normalizeCategories(raw: unknown): CategoryId[] {
@@ -43,8 +54,28 @@ function normalizeCategories(raw: unknown): CategoryId[] {
   const allowed = new Set<string>(ADDON_CATEGORY_IDS);
   const out: CategoryId[] = [];
   for (const item of raw) {
-    if (typeof item === "string" && allowed.has(item) && !out.includes(item as CategoryId)) {
+    if (
+      typeof item === "string" &&
+      allowed.has(item) &&
+      !out.includes(item as CategoryId)
+    ) {
       out.push(item as CategoryId);
+    }
+  }
+  return out;
+}
+
+function normalizeSports(raw: unknown): SportAddonId[] {
+  if (!Array.isArray(raw)) return [];
+  const allowed = new Set<string>(SPORT_ADDON_IDS);
+  const out: SportAddonId[] = [];
+  for (const item of raw) {
+    if (
+      typeof item === "string" &&
+      allowed.has(item) &&
+      !out.includes(item as SportAddonId)
+    ) {
+      out.push(item as SportAddonId);
     }
   }
   return out;
@@ -58,6 +89,7 @@ export function parseEntitlements(raw: string | null): EntitlementsState | null 
       premium: Boolean(parsed.premium),
       allAccess: Boolean(parsed.allAccess),
       categories: normalizeCategories(parsed.categories),
+      sports: normalizeSports(parsed.sports),
     };
   } catch {
     return null;
@@ -86,6 +118,7 @@ export function readEntitlements(): EntitlementsState {
         premium: true,
         allAccess: false,
         categories: [],
+        sports: [],
       };
       writeEntitlements(migrated);
       return migrated;
@@ -104,13 +137,19 @@ export function writeEntitlements(state: EntitlementsState): void {
       premium: Boolean(state.premium) || Boolean(state.allAccess),
       allAccess: Boolean(state.allAccess),
       categories: normalizeCategories(state.categories),
+      sports: normalizeSports(state.sports),
     };
-    // All Access implies Premium + all live add-ons
+    // All Access implies Premium + all category add-ons + all sport add-ons
     if (normalized.allAccess) {
       normalized.premium = true;
       for (const id of ADDON_CATEGORY_IDS) {
-        if (isLiveCategory(id) && !normalized.categories.includes(id)) {
+        if (!normalized.categories.includes(id)) {
           normalized.categories.push(id);
+        }
+      }
+      for (const id of SPORT_ADDON_IDS) {
+        if (!normalized.sports.includes(id)) {
+          normalized.sports.push(id);
         }
       }
     }
@@ -149,7 +188,8 @@ export function hasPremiumAccess(state: EntitlementsState): boolean {
 /**
  * Whether the user owns a category for selection / future catalog access.
  * - Pokémon: always "owned" for browsing (freemium depth applies separately)
- * - Others: add-on in `categories`, or All Access (which also unlocks live add-ons)
+ * - Others: add-on in `categories`, or All Access
+ * - Sports: category add-on OR any per-sport add-on (reserves sports chip entitlement)
  */
 export function ownsCategory(
   state: EntitlementsState,
@@ -157,7 +197,18 @@ export function ownsCategory(
 ): boolean {
   if (categoryId === "pokemon") return true;
   if (state.allAccess) return true;
-  return state.categories.includes(categoryId);
+  if (state.categories.includes(categoryId)) return true;
+  if (categoryId === "sports" && state.sports.length > 0) return true;
+  return false;
+}
+
+export function ownsSport(
+  state: EntitlementsState,
+  sportId: SportAddonId,
+): boolean {
+  if (state.allAccess) return true;
+  if (state.categories.includes("sports")) return true;
+  return state.sports.includes(sportId);
 }
 
 /**
@@ -191,13 +242,54 @@ export function unlockAddonState(
   };
 }
 
+export function unlockSportState(
+  prev: EntitlementsState,
+  sportId: SportAddonId,
+): EntitlementsState {
+  if (prev.sports.includes(sportId)) return prev;
+  return {
+    ...prev,
+    sports: [...prev.sports, sportId],
+  };
+}
+
 export function unlockAllAccessState(): EntitlementsState {
   return {
     premium: true,
     allAccess: true,
     // Coming-soon add-ons are still marked entitled for CTA messaging
     categories: [...ADDON_CATEGORY_IDS],
+    sports: [...SPORT_ADDON_IDS],
   };
+}
+
+/**
+ * Apply one or more Stripe-confirmed entitlement keys onto local state.
+ */
+export function applyCheckoutEntitlements(
+  prev: EntitlementsState,
+  keys: CheckoutEntitlementKey[],
+): EntitlementsState {
+  let next = { ...prev, categories: [...prev.categories], sports: [...prev.sports] };
+  for (const key of keys) {
+    if (key === "premium") {
+      next = unlockPremiumState(next);
+      continue;
+    }
+    if (key === "all_access") {
+      next = unlockAllAccessState();
+      continue;
+    }
+    if (key === "one-piece" || key === "mtg" || key === "sports") {
+      next = unlockAddonState(next, key);
+      continue;
+    }
+    const sport = sportIdFromEntitlement(key);
+    if (sport) {
+      next = unlockSportState(next, sport);
+    }
+  }
+  return next;
 }
 
 export function entitlementBadgeLabel(state: EntitlementsState): string | null {
@@ -215,3 +307,5 @@ export function categoryEntitlementHint(
   if (ownsCategory(state, categoryId)) return "entitled_coming_soon";
   return "locked_coming_soon";
 }
+
+export type { SportAddonId, CheckoutEntitlementKey };

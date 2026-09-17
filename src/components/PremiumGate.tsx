@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { PREMIUM_PRICE_LABEL } from "@/hooks/usePremium";
+import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 
 type Props = {
   /** Short headline, e.g. "19 more chase · 122 in set" */
   title: string;
   /** Supporting copy under the title */
   message: string;
+  /** Demo / local unlock fallback when Stripe is not configured */
   onUnlock: () => void;
   /** Compact strip under free chase tiles vs full-panel entire-set gate */
   variant?: "panel" | "inline";
@@ -18,10 +21,26 @@ export function PremiumGate({
   onUnlock,
   variant = "panel",
 }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+
   const shell =
     variant === "inline"
       ? "relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-slate-900/90 via-slate-950 to-amber-950/30 p-5 sm:p-6"
       : "mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-b from-slate-900/80 to-slate-950/90 px-6 py-10 text-center shadow-lg shadow-amber-950/20";
+
+  const handleUnlock = async () => {
+    setBusy(true);
+    setHint(null);
+    try {
+      await purchaseEntitlement("premium", {
+        onDemoFallback: onUnlock,
+        onStatus: setHint,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className={shell} role="region" aria-label="Premium unlock">
@@ -56,13 +75,14 @@ export function PremiumGate({
       >
         <button
           type="button"
-          onClick={onUnlock}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-base font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 sm:w-auto sm:text-sm"
+          onClick={() => void handleUnlock()}
+          disabled={busy}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-base font-bold text-slate-950 shadow transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 disabled:opacity-60 sm:w-auto sm:text-sm"
         >
-          Unlock Premium · {PREMIUM_PRICE_LABEL}
+          {busy ? "Working…" : `Unlock Premium · ${PREMIUM_PRICE_LABEL}`}
         </button>
         <span className="text-center text-[11px] text-slate-500 sm:text-left">
-          Demo unlock · no payment
+          {hint ?? "Stripe when configured · demo unlock otherwise"}
         </span>
       </div>
     </div>

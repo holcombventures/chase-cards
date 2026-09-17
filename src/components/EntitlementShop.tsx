@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import {
   ADDON_CATEGORY_IDS,
   getCategory,
@@ -10,12 +11,27 @@ import {
   ALL_ACCESS_PRICE_LABEL,
   PREMIUM_PRICE_LABEL,
   type EntitlementsState,
+  type SportAddonId,
 } from "@/lib/entitlements";
+import {
+  SPORT_ADDON_IDS,
+  type CheckoutEntitlementKey,
+} from "@/lib/stripe/catalog";
+import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
+
+const SPORT_LABELS: Record<SportAddonId, string> = {
+  baseball: "Baseball",
+  basketball: "Basketball",
+  football: "Football",
+  hockey: "Hockey",
+  soccer: "Soccer",
+};
 
 type Props = {
   entitlements: EntitlementsState;
   onUnlockPremium: () => void;
   onUnlockAddon: (id: CategoryId) => void;
+  onUnlockSport?: (id: SportAddonId) => void;
   onUnlockAllAccess: () => void;
   onRestoreFree: () => void;
   /** Optional highlight for a specific category add-on CTA */
@@ -27,15 +43,50 @@ export function EntitlementShop({
   entitlements,
   onUnlockPremium,
   onUnlockAddon,
+  onUnlockSport,
   onUnlockAllAccess,
   onRestoreFree,
   highlightAddon = null,
   compact = false,
 }: Props) {
+  const [busy, setBusy] = useState<CheckoutEntitlementKey | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [stripeMode, setStripeMode] = useState<boolean | null>(null);
+
+  const buy = useCallback(
+    async (key: CheckoutEntitlementKey, demo: () => void) => {
+      setBusy(key);
+      setStatus(null);
+      try {
+        await purchaseEntitlement(key, {
+          onDemoFallback: () => {
+            setStripeMode(false);
+            demo();
+          },
+          onStatus: (msg) => {
+            if (msg === "Starting checkout…") setStripeMode(true);
+            setStatus(msg);
+          },
+        });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [],
+  );
+
   const hasAny =
     entitlements.premium ||
     entitlements.allAccess ||
-    entitlements.categories.length > 0;
+    entitlements.categories.length > 0 ||
+    entitlements.sports.length > 0;
+
+  const modeHint =
+    stripeMode === true
+      ? "Stripe Checkout"
+      : stripeMode === false
+        ? "Demo unlock · Stripe not configured"
+        : "Pays with Stripe when configured · demo unlock otherwise";
 
   return (
     <div
@@ -50,41 +101,47 @@ export function EntitlementShop({
         <h3 className="text-sm font-semibold text-white sm:text-base">
           Unlock more chase
         </h3>
-        <span className="text-[11px] text-slate-500">
-          Demo unlock · no payment
-        </span>
+        <span className="text-[11px] text-slate-500">{modeHint}</span>
       </div>
 
+      {status ? (
+        <p className="mb-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100">
+          {status}
+        </p>
+      ) : null}
+
       <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Premium */}
         <ShopCard
           title="Premium"
           price={PREMIUM_PRICE_LABEL}
           description="Full chase (top 20%) + entire set in owned categories. Pokémon included."
           owned={entitlements.premium || entitlements.allAccess}
           ownedLabel={entitlements.allAccess ? "Included in All Access" : "Owned"}
-          onClick={onUnlockPremium}
+          busy={busy === "premium"}
+          onClick={() => void buy("premium", onUnlockPremium)}
           accent="amber"
         />
 
-        {/* All Access */}
         <ShopCard
           title="All Access"
           price={ALL_ACCESS_PRICE_LABEL}
-          description="Permanent unlock for all live categories + category add-ons. Best for multi-TCG."
+          description="Permanent unlock for all live categories + category & sport add-ons. Best for multi-TCG."
           owned={entitlements.allAccess}
           ownedLabel="Owned"
-          onClick={onUnlockAllAccess}
+          busy={busy === "all_access"}
+          onClick={() => void buy("all_access", onUnlockAllAccess)}
           accent="violet"
           highlight
         />
 
-        {/* Add-ons */}
         {ADDON_CATEGORY_IDS.map((id) => {
           const cat = getCategory(id);
           const owned =
-            entitlements.allAccess || entitlements.categories.includes(id);
+            entitlements.allAccess ||
+            entitlements.categories.includes(id) ||
+            (id === "sports" && entitlements.sports.length > 0);
           const isHighlight = highlightAddon === id;
+          const key = id as CheckoutEntitlementKey;
           return (
             <ShopCard
               key={id}
@@ -92,19 +149,66 @@ export function EntitlementShop({
               price={cat.priceLabel ?? ADDON_PRICE_LABEL}
               description={
                 cat.status === "coming_soon"
-                  ? `Unlocks ${cat.label} when the catalog goes live. Adapter not live yet.`
+                  ? id === "sports"
+                    ? `Unlocks Sports when the catalog goes live. Per-sport add-ons below also reserve entitlement.`
+                    : `Unlocks ${cat.label} when the catalog goes live. Adapter not live yet.`
                   : `Unlocks ${cat.label} chase & set browsing.`
               }
               owned={owned}
               ownedLabel={
                 entitlements.allAccess ? "Included in All Access" : "Owned"
               }
-              onClick={() => onUnlockAddon(id)}
+              busy={busy === key}
+              onClick={() => void buy(key, () => onUnlockAddon(id))}
               accent="sky"
               highlight={isHighlight}
             />
           );
         })}
+      </div>
+
+      <div className="mt-4">
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Sports add-ons (per sport)
+        </h4>
+        <p className="mb-2.5 text-[11px] text-slate-500">
+          Generic Sports stays coming soon until adapters ship. Buying a sport
+          sets that flag for future use.
+        </p>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {SPORT_ADDON_IDS.map((sportId) => {
+            const key =
+              `sports-${sportId}` as CheckoutEntitlementKey;
+            const owned =
+              entitlements.allAccess ||
+              entitlements.categories.includes("sports") ||
+              entitlements.sports.includes(sportId);
+            return (
+              <ShopCard
+                key={sportId}
+                title={`${SPORT_LABELS[sportId]} add-on`}
+                price={ADDON_PRICE_LABEL}
+                description={`Reserves ${SPORT_LABELS[sportId]} entitlement for when sports adapters go live.`}
+                owned={owned}
+                ownedLabel={
+                  entitlements.allAccess
+                    ? "Included in All Access"
+                    : entitlements.categories.includes("sports")
+                      ? "Included in Sports"
+                      : "Owned"
+                }
+                busy={busy === key}
+                onClick={() =>
+                  void buy(key, () => {
+                    if (onUnlockSport) onUnlockSport(sportId);
+                    else onUnlockAddon("sports");
+                  })
+                }
+                accent="sky"
+              />
+            );
+          })}
+        </div>
       </div>
 
       {hasAny ? (
@@ -131,6 +235,7 @@ function ShopCard({
   onClick,
   accent,
   highlight,
+  busy,
 }: {
   title: string;
   price: string;
@@ -140,6 +245,7 @@ function ShopCard({
   onClick: () => void;
   accent: "amber" | "violet" | "sky";
   highlight?: boolean;
+  busy?: boolean;
 }) {
   const border =
     accent === "violet"
@@ -172,9 +278,10 @@ function ShopCard({
         <button
           type="button"
           onClick={onClick}
-          className={`inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-xs font-bold transition ${btn}`}
+          disabled={busy}
+          className={`inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-xs font-bold transition disabled:opacity-60 ${btn}`}
         >
-          Demo unlock · {price}
+          {busy ? "Working…" : `Unlock · ${price}`}
         </button>
       )}
     </div>
