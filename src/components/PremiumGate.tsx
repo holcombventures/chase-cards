@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { PREMIUM_PRICE_LABEL } from "@/hooks/usePremium";
+import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
+import type { CheckoutEntitlementKey } from "@/lib/stripe/catalog";
 
 export type GateAction = {
   label: string;
   onClick: () => void;
   /** Visual accent for the button */
   accent?: "amber" | "sky" | "violet";
+  /** When set, button runs Stripe Checkout with onClick as demo fallback */
+  checkoutKey?: CheckoutEntitlementKey;
 };
 
 type Props = {
@@ -14,9 +19,9 @@ type Props = {
   title: string;
   /** Supporting copy under the title */
   message: string;
-  /** Primary unlock — defaults to Premium when actions omitted */
+  /** Demo / local unlock fallback when Stripe is not configured */
   onUnlock?: () => void;
-  /** Optional multi-CTA (Premium + add-on / All Access). Overrides onUnlock button. */
+  /** Optional multi-CTA (Premium + add-on / All Access). Overrides default Premium button. */
   actions?: GateAction[];
   /** Compact strip under free chase tiles vs full-panel entire-set gate */
   variant?: "panel" | "inline";
@@ -35,6 +40,9 @@ export function PremiumGate({
   actions,
   variant = "panel",
 }: Props) {
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+
   const shell =
     variant === "inline"
       ? "relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-slate-900/90 via-slate-950 to-amber-950/30 p-5 sm:p-6"
@@ -48,8 +56,27 @@ export function PremiumGate({
             label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
             onClick: onUnlock ?? (() => {}),
             accent: "amber",
+            checkoutKey: "premium",
           },
         ];
+
+  const runAction = async (action: GateAction) => {
+    const key = action.checkoutKey ?? action.label;
+    setBusyKey(key);
+    setHint(null);
+    try {
+      if (action.checkoutKey) {
+        await purchaseEntitlement(action.checkoutKey, {
+          onDemoFallback: action.onClick,
+          onStatus: setHint,
+        });
+      } else {
+        action.onClick();
+      }
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
   return (
     <div className={shell} role="region" aria-label="Unlock full access">
@@ -82,18 +109,23 @@ export function PremiumGate({
       <div
         className={`flex w-full flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center ${variant === "panel" ? "sm:justify-center" : ""} pt-2`}
       >
-        {resolvedActions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            onClick={action.onClick}
-            className={`inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-base font-bold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 sm:w-auto sm:text-sm ${accentClass(action.accent)}`}
-          >
-            {action.label}
-          </button>
-        ))}
+        {resolvedActions.map((action) => {
+          const key = action.checkoutKey ?? action.label;
+          const busy = busyKey === key;
+          return (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => void runAction(action)}
+              disabled={busyKey !== null}
+              className={`inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-base font-bold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 disabled:opacity-60 sm:w-auto sm:text-sm ${accentClass(action.accent)}`}
+            >
+              {busy ? "Working…" : action.label}
+            </button>
+          );
+        })}
         <span className="text-center text-[11px] text-slate-500 sm:text-left">
-          Demo unlock · no payment
+          {hint ?? "Stripe when configured · demo unlock otherwise"}
         </span>
       </div>
     </div>

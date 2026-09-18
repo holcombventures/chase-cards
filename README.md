@@ -2,7 +2,7 @@
 
 A Next.js prototype for browsing TCG sets and highlighting **chase cards** — the most valuable cards by live market price.
 
-**Phase 2B:** **Pokémon** and **One Piece English** are live catalogs via adapters under `src/lib/catalog/`. MTG / Sports stay coming-soon. Demo entitlements via localStorage (no Stripe yet).
+**Phase 2B:** **Pokémon** and **One Piece English** are live catalogs via adapters under `src/lib/catalog/`. MTG / Sports stay coming-soon. Entitlements via localStorage; **Stripe Checkout** when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
 
 ## Features
 
@@ -19,7 +19,7 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
   - **Free**: live catalogs (Pokémon + One Piece), top **3** chase (soft-lock remainder + unlock CTAs)
   - **Premium $4.99**: full chase (top 20%) + entire set for Pokémon; for One Piece also needs the One Piece add-on
   - **Category add-on $2.99** each (`one-piece`, `mtg`, `sports`): One Piece add-on unlocks full OP depth with Premium; MTG/Sports still reserve coming-soon entitlement
-  - **All Access $29.99** (permanent demo): Premium + all category add-ons; full depth on all live catalogs
+  - **All Access $29.99**: Premium + all category/sport add-ons; full depth on all live catalogs (Stripe or demo)
   - Coming-soon categories: entitled → “catalog coming soon”; otherwise paywall CTAs.
   - Legacy `chase-cards-premium` key migrates into the new entitlements store
   - Shop panel + **Restore free / clear entitlements** for testing
@@ -92,6 +92,7 @@ cp .env.example .env.local
 |---|---|---|
 | `POKEMONTCG_API_KEY` | No | API key from [dev.pokemontcg.io](https://dev.pokemontcg.io). Without it, public access is used and rate limits are stricter. If you hit HTTP 429, add a key and restart. |
 | `OPTCG_API_KEY` | No | `X-API-Key` for [OPTCG API](https://optcg-api.arjunbansal-ai.workers.dev). Without it, One Piece uses optcgapi.com fallback (sets/cards + prices). |
+| `STRIPE_SECRET_KEY` / `STRIPE_PRICE_*` | No (demo fallback) | See [STRIPE.md](./STRIPE.md) for full Stripe Checkout env list and Netlify checklist. |
 
 ## Run
 
@@ -118,13 +119,16 @@ src/
     api/sets/                      # GET set list (?category=pokemon|one-piece)
     api/sets/[setId]/cards/        # GET cards + prices + meta.stats
     api/sets/[setId]/stats/        # GET set statistics only
+    api/stripe/checkout/           # POST create Checkout Session
+    api/stripe/confirm/            # GET verify paid session → entitlements
+    api/stripe/webhook/            # POST optional checkout.session.completed
   lib/catalog/                     # category adapters (pokemon, one-piece)
     page.tsx                       # Home UI shell
     layout.tsx
   components/
     ChaseApp.tsx                   # Client app: category, set picker, freemium, shop
     CategorySwitcher.tsx           # Pokémon / One Piece / MTG / Sports
-    EntitlementShop.tsx            # Premium / add-ons / All Access demo unlocks
+    EntitlementShop.tsx            # Premium / add-ons / sports / All Access (Stripe + demo)
     SetStatsPanel.tsx              # Total / MoM with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
     PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
@@ -136,7 +140,8 @@ src/
     usePremium.ts                  # Thin compatibility wrapper → entitlements
   lib/
     catalog/types.ts               # Category ids, labels, live | coming_soon
-    entitlements.ts                # Entitlement model + legacy premium migration
+    entitlements.ts                # Entitlement model + sports add-ons + Stripe grants
+    stripe/                        # Price map, Checkout helpers, session → entitlements
     api.ts                         # Pokémon TCG API client
     tcgdex.ts                      # TCGdex set resolve + price/MoM fallback (cached)
     prices.ts                      # Market price + chase selection
@@ -144,15 +149,17 @@ src/
     types.ts
 ```
 
-## How to demo Phase 2A (chasecards.online)
-
-After Netlify deploys `main`:
+## How to demo Phase 2B (Deploy Preview / chasecards.online after merge)
 
 1. Open the site — category chips at the top of the controls.
-2. **Pokémon (Live)** — same freemium as before: top 3 chase free; Unlock Premium / shop for full chase + entire set.
-3. Switch to **One Piece / MTG / Sports** — no Pokémon API calls; see “Coming soon” + add-on / All Access CTAs.
-4. Demo-unlock an add-on or All Access → message becomes **“You’re entitled — catalog coming soon”**.
+2. **Pokémon (Live)** — top 3 chase free; Unlock Premium / shop for full chase + entire set.
+3. **One Piece English (Live)** — free top 3 chase; full depth needs Premium + One Piece add-on, or All Access (Stripe or demo).
+4. **MTG / Sports** — coming soon; entitled → “catalog coming soon”; otherwise paywall CTAs.
 5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
+
+## Stripe Checkout
+
+Documented in **[STRIPE.md](./STRIPE.md)**. `POST /api/stripe/checkout`, `GET /api/stripe/confirm`, and optional webhook. Demo unlock when Stripe env is missing.
 
 ## License
 

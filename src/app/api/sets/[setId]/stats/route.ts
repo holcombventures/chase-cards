@@ -3,6 +3,7 @@ import { PokemonTcgApiError } from "@/lib/api";
 import { enrichCard } from "@/lib/prices";
 import {
   fetchTcgdexFallbackPrices,
+  fetchTcgdexOnlyCards,
   type TcgdexSetPriceBundle,
   lookupTcgdexPrice,
 } from "@/lib/tcgdex";
@@ -105,15 +106,73 @@ export async function GET(request: Request, { params }: Params) {
       });
     }
 
-    const raw = await pokemonCatalog.fetchCards(setId);
-    let cards: CardWithPrice[] = raw.map((card) => {
-      const enriched = enrichCard(card);
-      return {
-        ...enriched,
-        priceSource:
-          enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
-      };
-    });
+    let cards: CardWithPrice[] = [];
+    let primaryFailed = false;
+
+    try {
+      const raw = await pokemonCatalog.fetchCards(setId);
+      cards = raw.map((card) => {
+        const enriched = enrichCard(card);
+        return {
+          ...enriched,
+          priceSource:
+            enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
+        };
+      });
+    } catch (err) {
+      if (err instanceof PokemonTcgApiError) {
+        primaryFailed = true;
+      } else {
+        throw err;
+      }
+    }
+
+    if (primaryFailed || cards.length === 0) {
+      try {
+        const only = await fetchTcgdexOnlyCards(
+          setId,
+          setNameParam || cards[0]?.set?.name || null,
+        );
+        if (only && only.cards.length > 0) {
+          const priceSource = computePokemonPriceSource(only.cards);
+          const releaseDate =
+            releaseDateParam || only.bundle.releaseDate || null;
+          const pricedCount = only.cards.filter(
+            (c) => c.marketPrice !== null,
+          ).length;
+          const stats = buildSetStats({
+            cards: only.cards,
+            priceSource,
+            releaseDate,
+            tcgdexBundle: only.bundle,
+            tcgdexAttempted: true,
+          });
+          return NextResponse.json({
+            data: stats,
+            meta: {
+              category,
+              setId,
+              total: only.cards.length,
+              pricedCount,
+              priceSource,
+              releaseDate,
+              catalogSource: "tcgdex",
+            },
+          });
+        }
+      } catch (err) {
+        console.error("TCGdex-only stats catalog failed:", err);
+      }
+      if (primaryFailed) {
+        return NextResponse.json(
+          {
+            error:
+              "Pokémon TCG API is temporarily unavailable for this set, and no TCGdex fallback was found. Please retry.",
+          },
+          { status: 502 },
+        );
+      }
+    }
 
     let pricedCount = cards.filter((c) => c.marketPrice !== null).length;
     let tcgdexBundle: TcgdexSetPriceBundle | null = null;

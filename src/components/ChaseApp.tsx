@@ -32,9 +32,27 @@ import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
 import { EntitlementShop } from "./EntitlementShop";
+import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
+import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
+import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
+import { fetchJsonWithRetry } from "@/lib/fetchJson";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
+
+
+function pickDefaultSetId(sets: PokemonSet[]): string {
+  if (!sets.length) return "";
+  // Prefer a set released at least 3 days ago so brand-new upstream gaps
+  // are less likely to be the first thing a visitor hits.
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  const stable = sets.find((s) => {
+    const raw = (s.releaseDate || "").replace(/\//g, "-");
+    const t = Date.parse(raw);
+    return Number.isFinite(t) && t <= cutoff;
+  });
+  return (stable ?? sets[0]).id;
+}
 
 export function ChaseApp() {
   const {
@@ -45,9 +63,87 @@ export function ChaseApp() {
     hasFullAccessInCategory,
     unlockPremium,
     unlockAddon,
+    unlockSport,
     unlockAllAccess,
+    applyPaidEntitlements,
     restoreFree,
   } = useEntitlements();
+
+  const [checkoutBanner, setCheckoutBanner] = useState<string | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+
+  // After Stripe redirect: ?checkout=success&session_id=… → confirm + grant
+  useEffect(() => {
+    if (!entitlementsReady || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (!checkout) return;
+
+    const cleanUrl = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("checkout");
+      url.searchParams.delete("session_id");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    };
+
+    if (checkout === "cancel") {
+      setCheckoutBanner("Checkout canceled — no charge was made.");
+      cleanUrl();
+      return;
+    }
+
+    if (checkout !== "success") return;
+    const sessionId = params.get("session_id")?.trim();
+    if (!sessionId) {
+      setCheckoutBanner("Checkout returned without a session id.");
+      cleanUrl();
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setCheckoutBusy(true);
+      const result = await confirmCheckoutSession(sessionId);
+      if (cancelled) return;
+      if (result.paid && result.entitlements.length) {
+        const keys = result.entitlements.filter(isCheckoutEntitlementKey);
+        applyPaidEntitlements(keys);
+        setCheckoutBanner(
+          keys.length
+            ? `Payment confirmed — unlocked ${keys.join(", ").replace(/_/g, " ")}.`
+            : "Payment confirmed.",
+        );
+      } else if (result.paid) {
+        setCheckoutBanner(
+          "Payment confirmed, but no matching price→entitlement mapping was found. Check Netlify STRIPE_PRICE_* env vars.",
+        );
+      } else {
+        setCheckoutBanner(
+          result.error || "Payment not confirmed yet. Try refreshing in a moment.",
+        );
+      }
+      cleanUrl();
+      setCheckoutBusy(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entitlementsReady, applyPaidEntitlements]);
+
+  const buyPremium = useCallback(async () => {
+    setCheckoutBusy(true);
+    try {
+      await purchaseEntitlement("premium", {
+        onDemoFallback: unlockPremium,
+        onStatus: (msg) => {
+          if (msg && msg !== "Starting checkout…") setCheckoutBanner(msg);
+        },
+      });
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [unlockPremium]);
 
   const [categoryId, setCategoryId] = useState<CategoryId>(DEFAULT_CATEGORY_ID);
   const category = getCategory(categoryId);
@@ -90,8 +186,34 @@ export function ChaseApp() {
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [setStats, setSetStats] = useState<SetStats | null>(null);
 
+  const reloadSets = useCallback(async () => {
+    if (!catalogLive) {
+      setSets([]);
+      setSetsLoading(false);
+      setSetsError(null);
+      return;
+    }
+    setSetsLoading(true);
+    setSetsError(null);
+    try {
+      const { res, body } = await fetchJsonWithRetry<{
+        data?: PokemonSet[];
+        error?: string;
+      }>(`/api/sets?category=${encodeURIComponent(categoryId)}`);
+      if (!res.ok) throw new Error(body.error || "Failed to load sets.");
+      const list = (body.data as PokemonSet[]) || [];
+      setSets(list);
+      setSetId((prev) => prev || pickDefaultSetId(list));
+    } catch (e) {
+      setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
+    } finally {
+      setSetsLoading(false);
+    }
+  }, [catalogLive, categoryId]);
+
   // Load sets for the selected live catalog
   useEffect(() => {
+
     if (!catalogLive) {
       setSets([]);
       setSetsLoading(false);
@@ -104,12 +226,15 @@ export function ChaseApp() {
       setSetsError(null);
       setSets([]);
       try {
-        const res = await fetch(
-          `/api/sets?category=${encodeURIComponent(categoryId)}`,
-        );
-        const body = await res.json();
+        const { res, body } = await fetchJsonWithRetry<{
+          data?: PokemonSet[];
+          error?: string;
+        }>(`/api/sets?category=${encodeURIComponent(categoryId)}`);
         if (!res.ok) throw new Error(body.error || "Failed to load sets.");
-        if (!cancelled) setSets(body.data as PokemonSet[]);
+        if (cancelled) return;
+        const list = (body.data as PokemonSet[]) || [];
+        setSets(list);
+        setSetId((prev) => prev || pickDefaultSetId(list));
       } catch (e) {
         if (!cancelled) {
           setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
@@ -128,6 +253,7 @@ export function ChaseApp() {
       id: string,
       cat: CategoryId,
       releaseDate?: string | null,
+      setName?: string | null,
     ) => {
       if (!id || !isLiveCategory(cat)) {
         setCards([]);
@@ -145,12 +271,20 @@ export function ChaseApp() {
         const qs = new URLSearchParams();
         qs.set("category", cat);
         if (releaseDate) qs.set("releaseDate", releaseDate);
-        const res = await fetch(
-          `/api/sets/${encodeURIComponent(id)}/cards?${qs.toString()}`,
-        );
-        const body = await res.json();
+        if (setName) qs.set("setName", setName);
+        const q = qs.toString();
+        const { res, body } = await fetchJsonWithRetry<{
+          data?: CardWithPrice[];
+          meta?: {
+            pricedCount?: number;
+            priceSource?: CardsMetaPriceSource;
+            fallbackUsed?: boolean;
+            stats?: SetStats;
+          };
+          error?: string;
+        }>(`/api/sets/${encodeURIComponent(id)}/cards?${q}`);
         if (!res.ok) throw new Error(body.error || "Failed to load cards.");
-        setCards(body.data as CardWithPrice[]);
+        setCards((body.data as CardWithPrice[]) || []);
         setPricedCount(body.meta?.pricedCount ?? 0);
         setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
         setFallbackUsed(Boolean(body.meta?.fallbackUsed));
@@ -182,12 +316,18 @@ export function ChaseApp() {
       setCardsLoading(false);
       return;
     }
-    void loadCards(setId, categoryId, selectedSet?.releaseDate ?? null);
+    void loadCards(
+      setId,
+      categoryId,
+      selectedSet?.releaseDate ?? null,
+      selectedSet?.name ?? null,
+    );
   }, [
     catalogLive,
     categoryId,
     setId,
     selectedSet?.releaseDate,
+    selectedSet?.name,
     loadCards,
   ]);
 
@@ -249,6 +389,7 @@ export function ChaseApp() {
           label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
           onClick: unlockPremium,
           accent: "amber",
+          checkoutKey: "premium",
         },
       ];
     }
@@ -259,6 +400,7 @@ export function ChaseApp() {
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: unlockPremium,
         accent: "amber",
+        checkoutKey: "premium",
       });
     }
     if (!ownsThis) {
@@ -266,6 +408,7 @@ export function ChaseApp() {
         label: `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`,
         onClick: () => unlockAddon(categoryId),
         accent: "sky",
+        checkoutKey: categoryId as "one-piece" | "mtg" | "sports",
       });
     }
     if (!entitlements.allAccess) {
@@ -273,6 +416,7 @@ export function ChaseApp() {
         label: `All Access · ${ALL_ACCESS_PRICE_LABEL}`,
         onClick: unlockAllAccess,
         accent: "violet",
+        checkoutKey: "all_access",
       });
     }
     if (actions.length === 0) {
@@ -280,6 +424,7 @@ export function ChaseApp() {
         label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: unlockPremium,
         accent: "amber",
+        checkoutKey: "premium",
       });
     }
     return actions;
@@ -368,8 +513,9 @@ export function ChaseApp() {
               ) : (
                 <button
                   type="button"
-                  onClick={unlockPremium}
-                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
+                  onClick={() => void buyPremium()}
+                  disabled={checkoutBusy}
+                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
                 >
                   Unlock Premium · {PREMIUM_PRICE_LABEL}
                 </button>
@@ -395,6 +541,22 @@ export function ChaseApp() {
         </p>
       </header>
 
+      {checkoutBanner ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-400/30 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100"
+          role="status"
+        >
+          <span>{checkoutBusy ? "Confirming payment…" : checkoutBanner}</span>
+          <button
+            type="button"
+            className="text-xs text-emerald-200/80 underline-offset-2 hover:underline"
+            onClick={() => setCheckoutBanner(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <section className="sticky top-0 z-20 space-y-4 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
         <CategorySwitcher
           value={categoryId}
@@ -415,6 +577,7 @@ export function ChaseApp() {
               variant="error"
               title="Couldn’t load sets"
               message={setsError}
+              onRetry={() => void reloadSets()}
             />
           ) : sets.length === 0 ? (
             <StatusPanel
@@ -466,6 +629,7 @@ export function ChaseApp() {
             entitlements={entitlements}
             onUnlockPremium={unlockPremium}
             onUnlockAddon={unlockAddon}
+            onUnlockSport={unlockSport}
             onUnlockAllAccess={unlockAllAccess}
             onRestoreFree={restoreFree}
             highlightAddon={!ownsThis ? categoryId : null}
@@ -492,6 +656,14 @@ export function ChaseApp() {
               variant="error"
               title="Couldn’t load cards"
               message={cardsError}
+              onRetry={() =>
+                void loadCards(
+                  setId,
+                  categoryId,
+                  selectedSet?.releaseDate ?? null,
+                  selectedSet?.name ?? null,
+                )
+              }
             />
           ) : cards.length === 0 ? (
             <StatusPanel
@@ -631,6 +803,7 @@ export function ChaseApp() {
           entitlements={entitlements}
           onUnlockPremium={unlockPremium}
           onUnlockAddon={unlockAddon}
+          onUnlockSport={unlockSport}
           onUnlockAllAccess={unlockAllAccess}
           onRestoreFree={restoreFree}
           compact
@@ -665,8 +838,8 @@ export function ChaseApp() {
           <>
             {" "}
             · Free: top {FREE_CHASE_LIMIT} chase on live catalogs · Premium{" "}
-            {PREMIUM_PRICE_LABEL} · Add-ons $2.99 · All Access $29.99 (demo, no
-            payment).
+            {PREMIUM_PRICE_LABEL} · Add-ons $2.99 · All Access $29.99 · Stripe
+            when configured.
           </>
         ) : null}
       </footer>
@@ -679,8 +852,8 @@ function ComingSoonCategoryPanel({
   hint,
   ownsThis,
   hasPremium,
-  onUnlockAddon,
-  onUnlockAllAccess,
+  onUnlockAddon: _onUnlockAddon,
+  onUnlockAllAccess: _onUnlockAllAccess,
   onUnlockPremium,
 }: {
   categoryId: CategoryId;
@@ -692,6 +865,19 @@ function ComingSoonCategoryPanel({
   onUnlockPremium: () => void;
 }) {
   const cat = getCategory(categoryId);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const buy = async (
+    key: "premium" | "all_access" | "one-piece" | "mtg" | "sports",
+    demo: () => void,
+  ) => {
+    setBusy(key);
+    try {
+      await purchaseEntitlement(key, { onDemoFallback: demo });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (hint === "entitled_coming_soon" || ownsThis) {
     return (
@@ -730,37 +916,26 @@ function ComingSoonCategoryPanel({
         You can select this category now. Unlock the{" "}
         <strong className="text-amber-200">{cat.shortLabel} add-on</strong> (
         {cat.priceLabel}) or <strong className="text-violet-200">All Access</strong>{" "}
-        ($29.99) to reserve entitlement for when the catalog goes live.
+        ($29.99) via the shop to reserve entitlement for when the catalog goes
+        live.
         {hasPremium
           ? " Premium covers Pokémon depth; One Piece full depth needs its add-on or All Access."
           : " Premium ($4.99) unlocks full Pokémon chase today."}
       </p>
-      <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
-        <button
-          type="button"
-          onClick={onUnlockAddon}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-sky-300"
-        >
-          Unlock {cat.shortLabel} · {cat.priceLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onUnlockAllAccess}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-violet-300"
-        >
-          All Access · $29.99
-        </button>
-        {!hasPremium ? (
+      {!hasPremium ? (
+        <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:justify-center">
           <button
             type="button"
-            onClick={onUnlockPremium}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-400/20"
+            disabled={busy !== null}
+            onClick={() => void buy("premium", onUnlockPremium)}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60"
           >
-            Premium · {PREMIUM_PRICE_LABEL}
+            {busy === "premium"
+              ? "Working…"
+              : `Premium · ${PREMIUM_PRICE_LABEL}`}
           </button>
-        ) : null}
-      </div>
-      <span className="text-[11px] text-slate-500">Demo unlock · no payment</span>
+        </div>
+      ) : null}
     </div>
   );
 }
