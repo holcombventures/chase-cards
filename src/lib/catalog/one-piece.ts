@@ -95,10 +95,52 @@ function imageUrlForCardId(cardId: string): string {
   return `${OPTCG_BASE}/images/${encodeURIComponent(cardId)}`;
 }
 
+/** Filename stem from a card image URL, e.g. …/OP01-120_p2.jpg → OP01-120_p2 */
+function imageStemFromUrl(imageUrl: string): string | null {
+  const cleaned = imageUrl.trim().split("?")[0] || "";
+  const base = cleaned.split("/").pop() || "";
+  if (!base) return null;
+  const stem = base.replace(/\.[a-zA-Z0-9]+$/, "");
+  return stem || null;
+}
+
+/**
+ * Unique id for print variants that share card_set_id (e.g. OP01-120 base/p1/p2).
+ * Prefer the image filename stem when it differs from the base set id.
+ */
+function resolveVariantCardId(
+  baseId: string,
+  cardImage: string | null | undefined,
+  cardName: string,
+): string {
+  const base = baseId.trim();
+  if (!base) return base;
+
+  const stem = cardImage ? imageStemFromUrl(cardImage) : null;
+  if (stem && stem.toUpperCase() !== base.toUpperCase()) {
+    return stem;
+  }
+
+  const name = cardName || "";
+  const looksVariant = /parallel|manga|alternate\s*art|\bAA\b/i.test(name);
+  const pMatch = (stem || cardImage || "").match(/_p(\d+)/i);
+  if (looksVariant && pMatch) {
+    const suffix = `_p${pMatch[1]}`;
+    if (!base.toLowerCase().endsWith(suffix.toLowerCase())) {
+      return `${base}${suffix}`;
+    }
+  }
+
+  return base;
+}
+
 function cardNumberFromId(cardSetId: string): string {
-  // OP01-077 → 077; EB01-001 → 001
+  // OP01-077 → 077; OP01-120_p2 → 120 (strip variant suffix for UI)
   const parts = cardSetId.split("-");
-  if (parts.length >= 2) return parts[parts.length - 1] || cardSetId;
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1] || cardSetId;
+    return last.replace(/_p\d+$/i, "") || last;
+  }
   return cardSetId;
 }
 
@@ -125,18 +167,18 @@ function normalizeOptcgapiSetId(rawId: string): string {
 
 /**
  * Card id prefixes that belong to a set. Null = do not filter.
- * OP-17 → OP17; EB-01 → EB01; PRB-01 → PRB01; OP14-EB04 → OP14 (+ optional EB04).
+ * OP-17 → OP17 only (box chase = in-product; never EB/ST/PRB/P bleed).
+ * Amalgamated upstream OP14-EB04 → OP14 only (do not also include EB04).
+ * Variant ids like OP01-120_p2 still match via OP01- prefix.
  */
 function expectedCardPrefixes(setId: string): string[] | null {
   const raw = setId.trim();
   if (!raw) return null;
 
+  // Upstream amalgam slug/id — box chase stays on the OP booster half only
   const amalgam = raw.match(/^OP(\d+)-EB(\d+)$/i);
   if (amalgam) {
-    return [
-      `OP${String(parseInt(amalgam[1], 10)).padStart(2, "0")}`,
-      `EB${String(parseInt(amalgam[2], 10)).padStart(2, "0")}`,
-    ];
+    return [`OP${String(parseInt(amalgam[1], 10)).padStart(2, "0")}`];
   }
 
   const simple = raw.match(/^(OP|EB|PRB|ST)-?(\d+)$/i);
@@ -162,7 +204,8 @@ function expectedCardPrefixes(setId: string): string[] | null {
 function cardMatchesSet(cardId: string, setId: string): boolean {
   const prefixes = expectedCardPrefixes(setId);
   if (!prefixes || prefixes.length === 0) return true;
-  const id = cardId.trim().toUpperCase();
+  // Strip variant suffix so OP01-120_p2 still matches OP01
+  const id = cardId.trim().toUpperCase().replace(/_P\d+$/i, "");
   return prefixes.some((p) => {
     const pref = p.toUpperCase();
     // Require boundary after prefix so OP01 does not match OP010… and OP1≠OP17
@@ -387,21 +430,26 @@ async function fetchCardsFromOptcg(
   const cards: PokemonCard[] = [];
 
   for (const row of rows) {
-    const id = (row.id || row.card_id || "").trim();
+    const baseId = (row.id || row.card_id || "").trim();
     const name = (row.name || row.card_name || "").trim();
-    if (!id || !name) continue;
+    if (!baseId || !name) continue;
 
-    const number =
-      (row.number || "").trim() || cardNumberFromId(id);
-    const price =
-      asFinitePrice(row.price) ?? asFinitePrice(row.market_price);
     const imgFromFields =
       row.images?.large ||
       row.images?.small ||
       row.image_url ||
       row.image ||
       "";
-    const image = imgFromFields || imageUrlForCardId(id);
+    const id = resolveVariantCardId(baseId, imgFromFields, name);
+    if (!cardMatchesSet(id, setId) && !cardMatchesSet(baseId, setId)) continue;
+
+    const number =
+      (row.number || "").trim().replace(/_p\d+$/i, "") ||
+      cardNumberFromId(id);
+    const price =
+      asFinitePrice(row.price) ?? asFinitePrice(row.market_price);
+    // Prefer upstream image (variant-accurate); else worker URL with variant id
+    const image = (imgFromFields || "").trim() || imageUrlForCardId(id);
     const setName =
       row.set?.name || row.set_name || setId;
     const resolvedSetId = row.set?.id || row.set_id || setId;
@@ -494,24 +542,27 @@ async function fetchCardsFromOptcgapi(setId: string): Promise<PokemonCard[]> {
   const cards: PokemonCard[] = [];
 
   for (const row of rows) {
-    const id = (row.card_set_id || "").trim();
+    const baseId = (row.card_set_id || "").trim();
     const name = (row.card_name || "").trim();
-    if (!id || !name) continue;
-    // Drop cross-set bleed (e.g. EB04 SP rows inside OP-17 payload)
-    if (!cardMatchesSet(id, setId)) continue;
+    if (!baseId || !name) continue;
+
+    const cardImage = (row.card_image || "").trim();
+    const id = resolveVariantCardId(baseId, cardImage, name);
+    // Drop cross-set bleed (e.g. EB04/ST/P/older OP rows inside OP-17 payload).
+    // Variant ids (OP01-120_p2) still match the booster prefix.
+    if (!cardMatchesSet(id, setId) && !cardMatchesSet(baseId, setId)) continue;
 
     const market =
       asFinitePrice(row.market_price) ?? asFinitePrice(row.inventory_price);
-    const workerImg = imageUrlForCardId(id);
-    const fallbackImg = (row.card_image || "").trim();
-    // Prefer public OPTCG worker images; fall back to optcgapi CDN
-    const image = workerImg || fallbackImg;
+    // card_image is source of truth for which art matches which price;
+    // worker URL with variant id is optional CDN-consistent fallback.
+    const image = cardImage || imageUrlForCardId(id);
 
     cards.push(
       mapCardToShared({
         id,
         name,
-        number: cardNumberFromId(id),
+        number: cardNumberFromId(baseId),
         rarity: row.rarity,
         setId,
         setName,

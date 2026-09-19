@@ -163,7 +163,8 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
             <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-2.5 py-2 shadow-inner shadow-amber-950/20">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/70">
                 Market
-                {card.priceVariant
+                {card.priceVariant &&
+                card.priceVariant.toLowerCase() !== "market"
                   ? ` · ${formatVariant(card.priceVariant)}`
                   : ""}
               </p>
