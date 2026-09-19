@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CardWithPrice,
   CardsMetaPriceSource,
@@ -39,6 +39,11 @@ import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 import { fetchJsonWithRetry } from "@/lib/fetchJson";
+import {
+  getCachedSet,
+  setCachedSet,
+  warmCardImages,
+} from "@/lib/cardSetCache";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
@@ -210,6 +215,9 @@ export function ChaseApp() {
   const [setStats, setSetStats] = useState<SetStats | null>(null);
   /** Set id that current cards/error correspond to — detects first-paint race */
   const [cardsSetId, setCardsSetId] = useState("");
+  /** True while refreshing prices after showing a cached set shell */
+  const [pricesUpdating, setPricesUpdating] = useState(false);
+  const loadGenRef = useRef(0);
 
   const reloadSets = useCallback(async () => {
     if (!catalogLive) {
@@ -288,11 +296,34 @@ export function ChaseApp() {
         setSetStats(null);
         setCardsError(null);
         setCardsSetId("");
+        setPricesUpdating(false);
         return;
       }
-      setCardsLoading(true);
-      setCardsError(null);
-      setSetStats(null);
+
+      const gen = ++loadGenRef.current;
+      const cached = getCachedSet(cat, id);
+
+      // Instant paint from session cache (prior visit this tab), then refresh.
+      if (cached) {
+        setCards(cached.cards);
+        setPricedCount(cached.pricedCount);
+        setPriceSource(cached.priceSource);
+        setFallbackUsed(cached.fallbackUsed);
+        setSetStats(cached.stats);
+        setCardsSetId(id);
+        setCardsError(null);
+        setCardsLoading(false);
+        setPricesUpdating(true);
+        warmCardImages(
+          selectChaseCards(cached.cards, { categoryId: cat }).cards,
+        );
+      } else {
+        setCardsLoading(true);
+        setCardsError(null);
+        setSetStats(null);
+        setPricesUpdating(false);
+      }
+
       try {
         const qs = new URLSearchParams();
         qs.set("category", cat);
@@ -309,23 +340,52 @@ export function ChaseApp() {
           };
           error?: string;
         }>(`/api/sets/${encodeURIComponent(id)}/cards?${q}`);
+        if (gen !== loadGenRef.current) return;
         if (!res.ok) throw new Error(body.error || "Failed to load cards.");
-        setCards((body.data as CardWithPrice[]) || []);
-        setPricedCount(body.meta?.pricedCount ?? 0);
-        setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
-        setFallbackUsed(Boolean(body.meta?.fallbackUsed));
-        setSetStats((body.meta?.stats as SetStats) ?? null);
+        const nextCards = (body.data as CardWithPrice[]) || [];
+        const nextPriced = body.meta?.pricedCount ?? 0;
+        const nextSource =
+          (body.meta?.priceSource as CardsMetaPriceSource) ?? null;
+        const nextFallback = Boolean(body.meta?.fallbackUsed);
+        const nextStats = (body.meta?.stats as SetStats) ?? null;
+        setCards(nextCards);
+        setPricedCount(nextPriced);
+        setPriceSource(nextSource);
+        setFallbackUsed(nextFallback);
+        setSetStats(nextStats);
         setCardsSetId(id);
+        setCachedSet(cat, id, {
+          cards: nextCards,
+          pricedCount: nextPriced,
+          priceSource: nextSource,
+          fallbackUsed: nextFallback,
+          stats: nextStats,
+        });
+        warmCardImages(
+          selectChaseCards(nextCards, { categoryId: cat }).cards,
+        );
       } catch (e) {
-        setCards([]);
-        setPricedCount(0);
-        setPriceSource(null);
-        setFallbackUsed(false);
-        setSetStats(null);
-        setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
-        setCardsSetId(id);
+        if (gen !== loadGenRef.current) return;
+        // Keep showing cached shells if we already painted them.
+        if (!cached) {
+          setCards([]);
+          setPricedCount(0);
+          setPriceSource(null);
+          setFallbackUsed(false);
+          setSetStats(null);
+          setCardsError(
+            e instanceof Error ? e.message : "Failed to load cards.",
+          );
+          setCardsSetId(id);
+        } else {
+          // Stale prices remain visible; soft-fail refresh.
+          setCardsError(null);
+        }
       } finally {
-        setCardsLoading(false);
+        if (gen === loadGenRef.current) {
+          setCardsLoading(false);
+          setPricesUpdating(false);
+        }
       }
     },
     [],
@@ -343,6 +403,7 @@ export function ChaseApp() {
       setCardsError(null);
       setCardsLoading(false);
       setCardsSetId("");
+      setPricesUpdating(false);
       return;
     }
     void loadCards(
@@ -371,7 +432,31 @@ export function ChaseApp() {
     setSetStats(null);
     setCardsError(null);
     setCardsSetId("");
+    setPricesUpdating(false);
   }, []);
+
+  /** Apply cached shells synchronously so set switch paints before fetch resolves. */
+  const handleSetIdChange = useCallback(
+    (id: string) => {
+      setSetId(id);
+      if (!id || !isLiveCategory(categoryId)) return;
+      const cached = getCachedSet(categoryId, id);
+      if (!cached) return;
+      setCards(cached.cards);
+      setPricedCount(cached.pricedCount);
+      setPriceSource(cached.priceSource);
+      setFallbackUsed(cached.fallbackUsed);
+      setSetStats(cached.stats);
+      setCardsSetId(id);
+      setCardsError(null);
+      setCardsLoading(false);
+      setPricesUpdating(true);
+      warmCardImages(
+        selectChaseCards(cached.cards, { categoryId }).cards,
+      );
+    },
+    [categoryId],
+  );
 
   const chaseSelection = useMemo(
     () => selectChaseCards(cards, { categoryId }),
@@ -553,7 +638,7 @@ export function ChaseApp() {
           value={categoryId}
           onChange={handleCategoryChange}
           ownedIds={ownedIds}
-          disabled={catalogLive && uiCardsLoading}
+          disabled={catalogLive && uiCardsLoading && !pricesUpdating}
         />
       </Hero>
 
@@ -583,8 +668,8 @@ export function ChaseApp() {
           <SetSelector
             sets={sets}
             value={setId}
-            onChange={setSetId}
-            disabled={uiCardsLoading}
+            onChange={handleSetIdChange}
+            disabled={uiCardsLoading && !pricesUpdating}
             label={setPickerLabel}
             size="prominent"
           />
@@ -622,12 +707,16 @@ export function ChaseApp() {
                 mode={mode}
                 onChange={setMode}
                 chaseCount={
-                  chaseReady && !uiCardsLoading ? chaseCards.length : null
+                  chaseReady && (!uiCardsLoading || pricesUpdating)
+                    ? chaseCards.length
+                    : null
                 }
                 totalCount={
-                  chaseReady && !uiCardsLoading ? cards.length : null
+                  chaseReady && (!uiCardsLoading || pricesUpdating)
+                    ? cards.length
+                    : null
                 }
-                disabled={!setId || uiCardsLoading}
+                disabled={!setId || (uiCardsLoading && !pricesUpdating)}
                 entireSetLocked={!fullAccessHere}
               />
             </div>
@@ -667,7 +756,7 @@ export function ChaseApp() {
               title="Choose a set to begin"
               message={`Select a ${category.label} set above to load cards and market prices.`}
             />
-          ) : uiCardsLoading ? (
+          ) : uiCardsLoading && !chaseReady ? (
             <StatusPanel
               variant="loading"
               title={`Loading ${selectedSet?.name ?? "set"}…`}
@@ -695,6 +784,15 @@ export function ChaseApp() {
             />
           ) : (
             <>
+              {pricesUpdating ? (
+                <p
+                  className="text-center text-xs text-amber-200/80 sm:text-left"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Updating prices…
+                </p>
+              ) : null}
               {setStats ? (
                 <SetStatsPanel stats={setStats} setName={selectedSet?.name} />
               ) : null}
