@@ -13,16 +13,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pokémon TCG Chase Cards",
+  title: "Chase Cards — See the expensive chase before you buy the box",
   description:
-    "Browse Pokémon TCG sets and highlight chase cards — the top 20% by TCGPlayer market price.",
+    "Free unlocks the top 3 chase cards. Premium opens the full set. Live for Pokémon and One Piece English.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#020617",
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+      <body className="min-h-full flex flex-col bg-slate-900 text-slate-100">
         {children}
       </body>
     </html>

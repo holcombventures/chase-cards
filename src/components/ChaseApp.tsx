@@ -32,6 +32,7 @@ import { StatusPanel } from "./StatusPanel";
 import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
+import { Hero, CHASE_SECTION_ID } from "./Hero";
 import { EntitlementShop } from "./EntitlementShop";
 import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
@@ -503,80 +504,26 @@ export function ChaseApp() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300/80">
-            {catalogLive
-              ? `${category.label} · Market chase`
-              : `${category.label} · Coming soon`}
-          </p>
-          {entitlementsReady ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {badge ? (
-                <>
-                  <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-200">
-                    {badge}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={restoreFree}
-                    className="text-[11px] text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
-                  >
-                    Restore free
-                  </button>
-                </>
-              ) : pickingPremiumHeader ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {LIVE_CATALOG_IDS.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      disabled={checkoutBusy}
-                      onClick={() => void buyPremiumFor(id)}
-                      className="min-h-11 rounded-full bg-amber-400 px-3 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
-                    >
-                      {getCategory(id).shortLabel}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setPickingPremiumHeader(false)}
-                    className="text-[11px] text-slate-400 underline-offset-2 hover:underline"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setPickingPremiumHeader(true)}
-                  disabled={checkoutBusy}
-                  className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
-                >
-                  Unlock Premium · {PREMIUM_PRICE_LABEL}
-                </button>
-              )}
-            </div>
-          ) : null}
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Chase Cards
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
-          Same chase experience across categories.{" "}
-          <strong className="font-semibold text-amber-200">Pokémon</strong> and{" "}
-          <strong className="font-semibold text-amber-200">
-            One Piece English
-          </strong>{" "}
-          are live — free shows the{" "}
-          <strong className="font-semibold text-amber-200">top 3 chase</strong>{" "}
-          in every live category. Premium ({PREMIUM_PRICE_LABEL}): choose{" "}
-          <strong className="font-semibold text-amber-200">one</strong> category
-          for full chase + entire set; other live categories stay top 3 until an
-          add-on ({"$2.99"}) or All Access ({"$29.99"}). MTG and Sports remain
-          coming-soon.
-        </p>
-      </header>
+      <Hero
+        top3={freeChaseVisible}
+        loading={catalogLive && (setsLoading || cardsLoading)}
+        entitlementsReady={entitlementsReady}
+        entitlements={entitlements}
+        badge={badge}
+        checkoutBusy={checkoutBusy}
+        pickingPremium={pickingPremiumHeader}
+        onStartPremiumPick={() => setPickingPremiumHeader(true)}
+        onCancelPremiumPick={() => setPickingPremiumHeader(false)}
+        onBuyPremiumFor={(id) => void buyPremiumFor(id)}
+        onRestoreFree={restoreFree}
+      >
+        <CategorySwitcher
+          value={categoryId}
+          onChange={handleCategoryChange}
+          ownedIds={ownedIds}
+          disabled={catalogLive && cardsLoading}
+        />
+      </Hero>
 
       {checkoutBanner ? (
         <div
@@ -594,16 +541,9 @@ export function ChaseApp() {
         </div>
       ) : null}
 
-      <section className="sticky top-0 z-20 space-y-4 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
-        <CategorySwitcher
-          value={categoryId}
-          onChange={handleCategoryChange}
-          ownedIds={ownedIds}
-          disabled={catalogLive && cardsLoading}
-        />
-
-        {catalogLive ? (
-          setsLoading ? (
+      {catalogLive ? (
+        <section className="sticky top-0 z-20 space-y-4 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
+          {setsLoading ? (
             <StatusPanel
               variant="loading"
               title="Loading sets…"
@@ -646,9 +586,9 @@ export function ChaseApp() {
                 entireSetLocked={!fullAccessHere}
               />
             </div>
-          )
-        ) : null}
-      </section>
+          )}
+        </section>
+      ) : null}
 
       {/* Coming-soon categories: entitlement CTAs only */}
       {!catalogLive ? (
@@ -675,7 +615,11 @@ export function ChaseApp() {
       ) : null}
 
       {catalogLive && !setsLoading && !setsError ? (
-        <section className="space-y-4">
+        <section
+          id={CHASE_SECTION_ID}
+          tabIndex={-1}
+          className="space-y-4 scroll-mt-28 outline-none"
+        >
           {!setId ? (
             <StatusPanel
               variant="empty"
@@ -749,23 +693,57 @@ export function ChaseApp() {
                 </>
               ) : (
                 <>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 className="text-lg font-semibold text-white">
-                      {mode === "chase"
-                        ? fullAccessHere
-                          ? "Chase cards"
-                          : "Top 3 chase"
-                        : "Entire set"}
-                      {selectedSet ? (
-                        <span className="ml-2 text-base font-normal text-slate-400">
-                          · {selectedSet.name}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="space-y-1">
+                      <h2 className="text-lg font-semibold text-white sm:text-xl">
+                        {mode === "chase"
+                          ? fullAccessHere
+                            ? "Chase cards"
+                            : "Top 3 chase"
+                          : "Entire set"}
+                        {selectedSet ? (
+                          <span className="ml-2 text-base font-normal text-slate-400">
+                            · {selectedSet.name}
+                          </span>
+                        ) : null}
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        {pricedCount} of {cards.length} cards have market prices
+                        {chaseSubtitle}
+                      </p>
+                    </div>
+                    {mode === "chase" ? (
+                      <div
+                        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-950/70 p-1"
+                        role="status"
+                        aria-label={
+                          fullAccessHere
+                            ? "Premium view — full chase unlocked"
+                            : "Free view — top 3 chase"
+                        }
+                      >
+                        <span
+                          className={[
+                            "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide",
+                            !fullAccessHere
+                              ? "bg-amber-400 text-slate-950 shadow"
+                              : "text-slate-400",
+                          ].join(" ")}
+                        >
+                          Free
                         </span>
-                      ) : null}
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      {pricedCount} of {cards.length} cards have market prices
-                      {chaseSubtitle}
-                    </p>
+                        <span
+                          className={[
+                            "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide",
+                            fullAccessHere
+                              ? "bg-amber-400 text-slate-950 shadow"
+                              : "text-slate-400",
+                          ].join(" ")}
+                        >
+                          Premium
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                   {showTcgdexNote ? (
                     <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100/90">
@@ -783,15 +761,35 @@ export function ChaseApp() {
                     </p>
                   ) : null}
                   {displayed.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    <div
+                      className={
+                        mode === "chase"
+                          ? "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"
+                          : "grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                      }
+                    >
                       {displayed.map((card, i) => (
                         <CardTile
                           key={card.id}
                           card={card}
                           rank={mode === "chase" ? i + 1 : undefined}
+                          foil={mode === "chase"}
                         />
                       ))}
                     </div>
+                  ) : null}
+
+                  {catalogLive &&
+                  !fullAccessHere &&
+                  mode === "chase" &&
+                  displayed.length > 0 ? (
+                    <ChaseUpgradeBar
+                      busy={checkoutBusy}
+                      picking={pickingPremiumHeader}
+                      onStartPick={() => setPickingPremiumHeader(true)}
+                      onCancelPick={() => setPickingPremiumHeader(false)}
+                      onBuyFor={(id) => void buyPremiumFor(id)}
+                    />
                   ) : null}
 
                   {showFreeChaseSoftLock ? (
@@ -806,7 +804,7 @@ export function ChaseApp() {
                         </p>
                       </div>
                       {lockedTeasers.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
                           {lockedTeasers.map((card, i) => (
                             <CardTile
                               key={`locked-${card.id}`}
@@ -878,6 +876,65 @@ export function ChaseApp() {
           </>
         ) : null}
       </footer>
+    </div>
+  );
+}
+
+
+function ChaseUpgradeBar({
+  busy,
+  picking,
+  onStartPick,
+  onCancelPick,
+  onBuyFor,
+}: {
+  busy: boolean;
+  picking: boolean;
+  onStartPick: () => void;
+  onCancelPick: () => void;
+  onBuyFor: (id: CategoryId) => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4"
+      role="region"
+      aria-label="Upgrade to Premium"
+    >
+      <p className="text-sm font-medium text-amber-50">
+        Unlock full chase + entire set —{" "}
+        <span className="font-bold text-amber-300">{PREMIUM_PRICE_LABEL}</span>
+      </p>
+      {picking ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {LIVE_CATALOG_IDS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              disabled={busy}
+              onClick={() => onBuyFor(id)}
+              className="min-h-11 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-60 sm:min-h-0"
+            >
+              {getCategory(id).shortLabel}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onCancelPick}
+            className="text-[11px] text-slate-300 underline-offset-2 hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onStartPick}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-60 sm:min-h-0"
+        >
+          Upgrade
+        </button>
+      )}
     </div>
   );
 }
