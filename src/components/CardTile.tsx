@@ -41,8 +41,21 @@ function LockIcon({ className }: { className?: string }) {
   );
 }
 
+function formatSetNumberLabel(card: CardWithPrice): string {
+  const num = card.number?.trim() || "?";
+  const printed = card.set?.printedTotal;
+  const total = card.set?.total;
+  const denom =
+    typeof printed === "number" && Number.isFinite(printed) && printed > 0
+      ? printed
+      : typeof total === "number" && Number.isFinite(total) && total > 0
+        ? total
+        : null;
+  return denom === null ? num : `${num}/${denom}`;
+}
+
 export function CardTile({ card, rank, locked = false, foil = false }: Props) {
-  const setLabel = `${card.number}/${card.set.printedTotal}`;
+  const setLabel = formatSetNumberLabel(card);
   const hasPrice = card.marketPrice !== null;
   const showFoil = foil && !locked;
 

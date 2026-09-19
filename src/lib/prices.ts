@@ -35,9 +35,63 @@ export function extractMarketPrice(card: PokemonCard): {
   };
 }
 
+/** Prefer printedTotal if finite >0, else total, else optional fallback. */
+export function resolveSetPrintedTotal(
+  set: PokemonCard["set"] | null | undefined,
+  fallback?: number | null,
+): number {
+  const printed = set?.printedTotal;
+  if (typeof printed === "number" && Number.isFinite(printed) && printed > 0) {
+    return printed;
+  }
+  const total = set?.total;
+  if (typeof total === "number" && Number.isFinite(total) && total > 0) {
+    return total;
+  }
+  if (typeof fallback === "number" && Number.isFinite(fallback) && fallback > 0) {
+    return fallback;
+  }
+  return 0;
+}
+
+/** Normalize set.printedTotal / set.total so UI never sees undefined. */
+export function normalizeCardSetTotals(
+  card: PokemonCard,
+  fallbackTotal?: number | null,
+): PokemonCard {
+  const printedTotal = resolveSetPrintedTotal(card.set, fallbackTotal);
+  const rawTotal = card.set?.total;
+  const total =
+    typeof rawTotal === "number" && Number.isFinite(rawTotal) && rawTotal > 0
+      ? rawTotal
+      : printedTotal;
+  return {
+    ...card,
+    set: {
+      id: card.set?.id ?? "",
+      name: card.set?.name ?? "",
+      printedTotal,
+      total,
+    },
+  };
+}
+
+/** After a full set fetch, fill missing printedTotal from cardinality. */
+export function normalizeCardsSetTotals(
+  cards: CardWithPrice[],
+): CardWithPrice[] {
+  if (!cards.length) return cards;
+  const fallback = cards.length;
+  return cards.map((c) => {
+    const normalized = normalizeCardSetTotals(c, fallback);
+    return { ...c, set: normalized.set };
+  });
+}
+
 export function enrichCard(card: PokemonCard): CardWithPrice {
   const price = extractMarketPrice(card);
-  return { ...card, ...price };
+  const normalized = normalizeCardSetTotals(card);
+  return { ...normalized, ...price };
 }
 
 export type ChaseMode = "priced" | "estimated";

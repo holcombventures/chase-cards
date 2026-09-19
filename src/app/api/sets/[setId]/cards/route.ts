@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { PokemonTcgApiError } from "@/lib/api";
-import { enrichCard } from "@/lib/prices";
+import { enrichCard, normalizeCardsSetTotals } from "@/lib/prices";
 import {
   fetchTcgdexFallbackPrices,
   fetchTcgdexOnlyCards,
@@ -123,14 +123,16 @@ async function handlePokemon(
 
   try {
     const raw = await pokemonCatalog.fetchCards(setId);
-    cards = raw.map((card) => {
-      const enriched = enrichCard(card);
-      return {
-        ...enriched,
-        priceSource:
-          enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
-      };
-    });
+    cards = normalizeCardsSetTotals(
+      raw.map((card) => {
+        const enriched = enrichCard(card);
+        return {
+          ...enriched,
+          priceSource:
+            enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
+        };
+      }),
+    );
   } catch (err) {
     if (err instanceof PokemonTcgApiError) {
       primaryFailed = true;
@@ -150,26 +152,27 @@ async function handlePokemon(
         setNameParam || cards[0]?.set?.name || null,
       );
       if (only && only.cards.length > 0) {
-        const priceSource = computePokemonPriceSource(only.cards);
+        const onlyCards = normalizeCardsSetTotals(only.cards);
+        const priceSource = computePokemonPriceSource(onlyCards);
         const releaseDate =
           releaseDateParam || only.bundle.releaseDate || null;
-        const pricedCount = only.cards.filter(
+        const pricedCount = onlyCards.filter(
           (c) => c.marketPrice !== null,
         ).length;
         const stats = buildSetStats({
-          cards: only.cards,
+          cards: onlyCards,
           priceSource,
           releaseDate,
           tcgdexBundle: only.bundle,
           tcgdexAttempted: true,
         });
         return NextResponse.json({
-          data: only.cards,
+          data: onlyCards,
           meta: {
             category: "pokemon",
-            total: only.cards.length,
+            total: onlyCards.length,
             pricedCount,
-            missingPriceCount: only.cards.length - pricedCount,
+            missingPriceCount: onlyCards.length - pricedCount,
             priceSource,
             fallbackUsed: true,
             releaseDate,
@@ -195,7 +198,7 @@ async function handlePokemon(
 
   const setName = setNameParam || cards[0]?.set?.name || null;
   const applied = await applyTcgdexPriceFallback(cards, setId, setName);
-  cards = applied.cards;
+  cards = normalizeCardsSetTotals(applied.cards);
 
   const priceSource = computePokemonPriceSource(cards);
   const releaseDate =
@@ -232,13 +235,15 @@ async function handleOnePiece(
   const { cards: raw, meta: fetchMeta } = await onePieceCatalog.fetchCards(setId);
   const backend: PriceSource = fetchMeta.priceBackend;
 
-  const cards: CardWithPrice[] = raw.map((card) => {
-    const enriched = enrichCard(card);
-    return {
-      ...enriched,
-      priceSource: enriched.marketPrice !== null ? backend : null,
-    };
-  });
+  const cards: CardWithPrice[] = normalizeCardsSetTotals(
+    raw.map((card) => {
+      const enriched = enrichCard(card);
+      return {
+        ...enriched,
+        priceSource: enriched.marketPrice !== null ? backend : null,
+      };
+    }),
+  );
 
   const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
   const priceSource: CardsMetaPriceSource =

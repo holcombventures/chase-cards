@@ -62,7 +62,11 @@ export function buildTotalSetValueMetric(
   );
   const pricedCount = priced.length;
   const sum = priced.reduce((acc, c) => acc + (c.marketPrice as number), 0);
-  const source = priceSourceLabel(priceSource);
+  // Never claim TCGPlayer / vendor sources when nothing is priced
+  const source =
+    pricedCount === 0 || priceSource === "none"
+      ? "Source: none (no usable market prices)"
+      : priceSourceLabel(priceSource);
 
   if (pricedCount === 0) {
     return {

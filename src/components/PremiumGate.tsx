@@ -31,6 +31,8 @@ type Props = {
   actions?: GateAction[];
   /** Compact strip under free chase tiles vs full-panel entire-set gate */
   variant?: "panel" | "inline";
+  /** When chase is estimated / unpriced — avoid market-price CTA copy */
+  estimatedChase?: boolean;
 };
 
 function accentClass(accent: GateAction["accent"] = "amber") {
@@ -45,6 +47,7 @@ export function PremiumGate({
   onUnlock,
   actions,
   variant = "panel",
+  estimatedChase = false,
 }: Props) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -145,11 +148,19 @@ export function PremiumGate({
       <ul className="mt-1 space-y-1 text-left text-xs text-slate-400 sm:text-sm">
         <li className="flex items-start gap-2">
           <CheckIcon />
-          <span>Full chase list (top 20% by market price)</span>
+          <span>
+            {estimatedChase
+              ? "Full estimated chase list"
+              : "Full chase list (top 20% by market price)"}
+          </span>
         </li>
         <li className="flex items-start gap-2">
           <CheckIcon />
-          <span>Entire set view for every card</span>
+          <span>
+            {estimatedChase
+              ? "Full chase + entire set when prices land"
+              : "Entire set view for every card"}
+          </span>
         </li>
       </ul>
 

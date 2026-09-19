@@ -208,6 +208,8 @@ export function ChaseApp() {
   );
   const [fallbackUsed, setFallbackUsed] = useState(false);
   const [setStats, setSetStats] = useState<SetStats | null>(null);
+  /** Set id that current cards/error correspond to — detects first-paint race */
+  const [cardsSetId, setCardsSetId] = useState("");
 
   const reloadSets = useCallback(async () => {
     if (!catalogLive) {
@@ -285,6 +287,7 @@ export function ChaseApp() {
         setFallbackUsed(false);
         setSetStats(null);
         setCardsError(null);
+        setCardsSetId("");
         return;
       }
       setCardsLoading(true);
@@ -312,6 +315,7 @@ export function ChaseApp() {
         setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
         setFallbackUsed(Boolean(body.meta?.fallbackUsed));
         setSetStats((body.meta?.stats as SetStats) ?? null);
+        setCardsSetId(id);
       } catch (e) {
         setCards([]);
         setPricedCount(0);
@@ -319,6 +323,7 @@ export function ChaseApp() {
         setFallbackUsed(false);
         setSetStats(null);
         setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
+        setCardsSetId(id);
       } finally {
         setCardsLoading(false);
       }
@@ -337,6 +342,7 @@ export function ChaseApp() {
       setSetStats(null);
       setCardsError(null);
       setCardsLoading(false);
+      setCardsSetId("");
       return;
     }
     void loadCards(
@@ -364,6 +370,7 @@ export function ChaseApp() {
     setFallbackUsed(false);
     setSetStats(null);
     setCardsError(null);
+    setCardsSetId("");
   }, []);
 
   const chaseSelection = useMemo(
@@ -375,13 +382,19 @@ export function ChaseApp() {
   const chaseNote = chaseSelection.note;
   const allSorted = useMemo(() => sortBySetNumber(cards), [cards]);
 
+  // Avoid empty first-paint: setId set but cards fetch not started yet
+  const awaitingCards = Boolean(setId) && cardsSetId !== setId;
+  const uiCardsLoading = cardsLoading || awaitingCards;
+  // Only use chase derived from cards that match the selected set
+  const chaseReady = Boolean(setId) && cardsSetId === setId && !cardsError;
+
   const freeChaseVisible = useMemo(
-    () => chaseCards.slice(0, FREE_CHASE_LIMIT),
-    [chaseCards],
+    () => (chaseReady ? chaseCards.slice(0, FREE_CHASE_LIMIT) : []),
+    [chaseCards, chaseReady],
   );
   const lockedChaseRemainder = useMemo(
-    () => chaseCards.slice(FREE_CHASE_LIMIT),
-    [chaseCards],
+    () => (chaseReady ? chaseCards.slice(FREE_CHASE_LIMIT) : []),
+    [chaseCards, chaseReady],
   );
   const lockedTeasers = useMemo(
     () => lockedChaseRemainder.slice(0, LOCKED_TEASER_COUNT),
@@ -395,20 +408,27 @@ export function ChaseApp() {
   const showEntireSetPaywall =
     catalogLive && !fullAccessHere && mode === "all";
 
-  const displayed = fullAccessHere
-    ? mode === "chase"
-      ? chaseCards
-      : allSorted
-    : mode === "chase"
-      ? freeChaseVisible
-      : [];
+  const displayed = !chaseReady
+    ? []
+    : fullAccessHere
+      ? mode === "chase"
+        ? chaseCards
+        : allSorted
+      : mode === "chase"
+        ? freeChaseVisible
+        : [];
+
+  const hasPricedCards = pricedCount > 0 && chaseMode !== "estimated";
+  const estimatedUnlock = chaseMode === "estimated" || pricedCount === 0;
 
   const showTcgdexNote =
     isPokemon &&
+    hasPricedCards &&
     (fallbackUsed || priceSource === "tcgdex" || priceSource === "mixed");
 
   const showOnePiecePriceNote =
     isOnePiece &&
+    hasPricedCards &&
     (priceSource === "optcg" || priceSource === "optcgapi");
 
   const unlockActions: GateAction[] = useMemo(() => {
@@ -478,7 +498,8 @@ export function ChaseApp() {
   })();
 
   const chaseSubtitle = (() => {
-    if (!catalogLive || !setId || cardsLoading || cardsError) return null;
+    if (!catalogLive || !setId || uiCardsLoading || cardsError || !chaseReady)
+      return null;
     if (fullAccessHere) {
       return mode === "chase"
         ? ` · showing top ${chaseCards.length} (≤20%, rounded up)`
@@ -492,10 +513,10 @@ export function ChaseApp() {
   })();
 
   const setPickerLabel = isPokemon
-    ? "Pokémon TCG Set"
+    ? "Choose set · Pokémon TCG"
     : isOnePiece
-      ? "One Piece English Set"
-      : `${category.shortLabel} Set`;
+      ? "Choose set · One Piece English"
+      : `Choose set · ${category.shortLabel}`;
 
   const loadingSetsMessage = isPokemon
     ? "Fetching set list from the Pokémon TCG API."
@@ -513,7 +534,7 @@ export function ChaseApp() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       <Hero
         top3={freeChaseVisible}
-        loading={catalogLive && (setsLoading || cardsLoading)}
+        loading={catalogLive && (setsLoading || uiCardsLoading)}
         estimated={chaseMode === "estimated" && freeChaseVisible.length > 0}
         entitlementsReady={entitlementsReady}
         entitlements={entitlements}
@@ -529,7 +550,7 @@ export function ChaseApp() {
           value={categoryId}
           onChange={handleCategoryChange}
           ownedIds={ownedIds}
-          disabled={catalogLive && cardsLoading}
+          disabled={catalogLive && uiCardsLoading}
         />
       </Hero>
 
@@ -549,8 +570,24 @@ export function ChaseApp() {
         </div>
       ) : null}
 
+      {catalogLive && !setsLoading && !setsError && sets.length > 0 ? (
+        <section
+          className="rounded-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 p-4 shadow-lg shadow-black/25 sm:p-5"
+          aria-label="Set picker"
+        >
+          <SetSelector
+            sets={sets}
+            value={setId}
+            onChange={setSetId}
+            disabled={uiCardsLoading}
+            label={setPickerLabel}
+            size="prominent"
+          />
+        </section>
+      ) : null}
+
       {catalogLive ? (
-        <section className="sticky top-0 z-20 space-y-4 rounded-2xl border border-white/10 bg-slate-950/95 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top))]">
+        <section className="sticky top-0 z-20 space-y-3 rounded-2xl border border-white/10 bg-slate-950/95 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-4 sm:pt-[calc(1rem+env(safe-area-inset-top))]">
           {setsLoading ? (
             <StatusPanel
               variant="loading"
@@ -571,26 +608,21 @@ export function ChaseApp() {
               message="The API returned an empty set list."
             />
           ) : (
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <SetSelector
-                sets={sets}
-                value={setId}
-                onChange={setSetId}
-                disabled={cardsLoading}
-                label={setPickerLabel}
-              />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200 sm:text-base">
+                <span className="text-slate-500">Set · </span>
+                {selectedSet?.name ?? "Select a set"}
+              </p>
               <ViewToggle
                 mode={mode}
                 onChange={setMode}
                 chaseCount={
-                  setId && !cardsLoading && !cardsError
-                    ? chaseCards.length
-                    : null
+                  chaseReady && !uiCardsLoading ? chaseCards.length : null
                 }
                 totalCount={
-                  setId && !cardsLoading && !cardsError ? cards.length : null
+                  chaseReady && !uiCardsLoading ? cards.length : null
                 }
-                disabled={!setId || cardsLoading}
+                disabled={!setId || uiCardsLoading}
                 entireSetLocked={!fullAccessHere}
               />
             </div>
@@ -634,7 +666,7 @@ export function ChaseApp() {
               title="Choose a set to begin"
               message={`Select a ${category.label} set above to load cards and market prices.`}
             />
-          ) : cardsLoading ? (
+          ) : uiCardsLoading ? (
             <StatusPanel
               variant="loading"
               title={`Loading ${selectedSet?.name ?? "set"}…`}
@@ -693,6 +725,7 @@ export function ChaseApp() {
                     message={unlockMessage}
                     onUnlock={unlockPremium}
                     actions={unlockActions}
+                    estimatedChase={estimatedUnlock}
                   />
                 </>
               ) : (
@@ -840,6 +873,7 @@ export function ChaseApp() {
                         message={unlockMessage}
                         onUnlock={unlockPremium}
                         actions={unlockActions}
+                        estimatedChase={estimatedUnlock}
                       />
                     </div>
                   ) : null}

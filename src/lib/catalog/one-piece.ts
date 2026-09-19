@@ -102,6 +102,92 @@ function cardNumberFromId(cardSetId: string): string {
   return cardSetId;
 }
 
+/** Normalize OP14-EB04 → OP-14 (zero-padded). */
+function formatOpStyleId(kind: string, num: number): string {
+  const n = Number.isFinite(num) ? num : 0;
+  const pad = n < 100 ? String(n).padStart(2, "0") : String(n);
+  return `${kind.toUpperCase()}-${pad}`;
+}
+
+/**
+ * Upstream optcgapi sometimes merges a booster + extra into one id (OP14-EB04).
+ * Expand to the English booster id so the set picker stays OP-01…OP-N shaped.
+ * EB half is not invented as a separate catalog row here (FLAG if missing).
+ */
+function normalizeOptcgapiSetId(rawId: string): string {
+  const id = rawId.trim();
+  const amalgam = id.match(/^OP(\d+)-EB(\d+)$/i);
+  if (amalgam) {
+    return formatOpStyleId("OP", parseInt(amalgam[1], 10));
+  }
+  return id;
+}
+
+/**
+ * Card id prefixes that belong to a set. Null = do not filter.
+ * OP-17 → OP17; EB-01 → EB01; PRB-01 → PRB01; OP14-EB04 → OP14 (+ optional EB04).
+ */
+function expectedCardPrefixes(setId: string): string[] | null {
+  const raw = setId.trim();
+  if (!raw) return null;
+
+  const amalgam = raw.match(/^OP(\d+)-EB(\d+)$/i);
+  if (amalgam) {
+    return [
+      `OP${String(parseInt(amalgam[1], 10)).padStart(2, "0")}`,
+      `EB${String(parseInt(amalgam[2], 10)).padStart(2, "0")}`,
+    ];
+  }
+
+  const simple = raw.match(/^(OP|EB|PRB|ST)-?(\d+)$/i);
+  if (simple) {
+    const kind = simple[1].toUpperCase();
+    const num = parseInt(simple[2], 10);
+    // Card ids use zero-padded forms (OP01-077, OP17-001) — never "OP1"
+    const body = String(num).padStart(2, "0");
+    return [`${kind}${body}`];
+  }
+
+  // Already compact e.g. OP17
+  const compact = raw.match(/^(OP|EB|PRB|ST)(\d+)$/i);
+  if (compact) {
+    const kind = compact[1].toUpperCase();
+    const num = parseInt(compact[2], 10);
+    return [`${kind}${String(num).padStart(2, "0")}`];
+  }
+
+  return null;
+}
+
+function cardMatchesSet(cardId: string, setId: string): boolean {
+  const prefixes = expectedCardPrefixes(setId);
+  if (!prefixes || prefixes.length === 0) return true;
+  const id = cardId.trim().toUpperCase();
+  return prefixes.some((p) => {
+    const pref = p.toUpperCase();
+    // Require boundary after prefix so OP01 does not match OP010… and OP1≠OP17
+    return id === pref || id.startsWith(`${pref}-`);
+  });
+}
+
+/** Upstream path slugs to try for a logical set id. */
+function optcgapiSlugsForSet(setId: string): string[] {
+  const raw = setId.trim();
+  const slugs = new Set<string>();
+  slugs.add(raw.toLowerCase());
+  slugs.add(raw.replace(/-/g, "").toLowerCase());
+
+  const simple = raw.match(/^OP-?(\d+)$/i);
+  if (simple) {
+    const n = parseInt(simple[1], 10);
+    const pad = String(n).padStart(2, "0");
+    // Amalgamated upstream ids observed: OP14-EB04, OP15-EB04
+    slugs.add(`op${pad}-eb04`);
+    slugs.add(`op${n}-eb04`);
+  }
+  return [...slugs];
+}
+
 function asFinitePrice(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return value;
@@ -171,9 +257,10 @@ function unwrapArray<T>(payload: unknown): T[] {
 }
 
 function mapOptcgapiSet(row: OptcgapiSetRow): PokemonSet | null {
-  const id = (row.set_id || "").trim();
+  const rawId = (row.set_id || "").trim();
   const name = (row.set_name || "").trim();
-  if (!id || !name) return null;
+  if (!rawId || !name) return null;
+  const id = normalizeOptcgapiSetId(rawId);
   return {
     id,
     name,
@@ -336,11 +423,12 @@ async function fetchCardsFromOptcg(
     );
   }
 
-  // Fix printedTotal once we know cardinality
-  const total = cards.length;
-  return cards.map((c) => ({
+  // Drop cross-set bleed, then fix printedTotal from cardinality
+  const filtered = cards.filter((c) => cardMatchesSet(c.id, setId));
+  const total = filtered.length;
+  return filtered.map((c) => ({
     ...c,
-    set: { ...c.set, printedTotal: total, total },
+    set: { ...c.set, id: setId, printedTotal: total, total },
   }));
 }
 
@@ -352,35 +440,65 @@ async function fetchSetsFromOptcgapi(): Promise<PokemonSet[]> {
   const mapped = rows
     .map(mapOptcgapiSet)
     .filter((s): s is PokemonSet => Boolean(s));
-  if (mapped.length === 0) {
+  // Dedupe by id (amalgamated rows may collapse to same OP-##)
+  const seen = new Set<string>();
+  const deduped: PokemonSet[] = [];
+  for (const s of mapped) {
+    const key = s.id.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(s);
+  }
+  if (deduped.length === 0) {
     throw new OnePieceApiError(
       "optcgapi.com returned no One Piece sets.",
       502,
     );
   }
-  return mapped;
+  return deduped;
 }
 
 async function fetchCardsFromOptcgapi(setId: string): Promise<PokemonCard[]> {
   // Public API uses lowercase path segment, e.g. /api/sets/op-01/
-  const slug = setId.toLowerCase();
-  const url = `${OPTCGAPI_SET_CARDS}/${encodeURIComponent(slug)}/`;
-  const { data } = await fetchJson<unknown>(url, {
-    headers: { Accept: "application/json" },
-  });
-  const rows = unwrapArray<OptcgapiCardRow>(data);
+  // Also try amalgamated slugs (op14-eb04) when OP-14 is requested.
+  let rows: OptcgapiCardRow[] = [];
+  let lastErr: OnePieceApiError | null = null;
+
+  for (const slug of optcgapiSlugsForSet(setId)) {
+    const url = `${OPTCGAPI_SET_CARDS}/${encodeURIComponent(slug)}/`;
+    try {
+      const { data } = await fetchJson<unknown>(url, {
+        headers: { Accept: "application/json" },
+      });
+      const got = unwrapArray<OptcgapiCardRow>(data);
+      if (got.length > 0) {
+        rows = got;
+        break;
+      }
+    } catch (err) {
+      if (err instanceof OnePieceApiError) {
+        lastErr = err;
+        if (err.status === 429) throw err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
   if (rows.length === 0) {
+    if (lastErr) throw lastErr;
     return [];
   }
 
   const setName = (rows[0]?.set_name || setId).trim();
-  const total = rows.length;
   const cards: PokemonCard[] = [];
 
   for (const row of rows) {
     const id = (row.card_set_id || "").trim();
     const name = (row.card_name || "").trim();
     if (!id || !name) continue;
+    // Drop cross-set bleed (e.g. EB04 SP rows inside OP-17 payload)
+    if (!cardMatchesSet(id, setId)) continue;
 
     const market =
       asFinitePrice(row.market_price) ?? asFinitePrice(row.inventory_price);
@@ -395,9 +513,9 @@ async function fetchCardsFromOptcgapi(setId: string): Promise<PokemonCard[]> {
         name,
         number: cardNumberFromId(id),
         rarity: row.rarity,
-        setId: (row.set_id || setId).trim(),
+        setId,
         setName,
-        printedTotal: total,
+        printedTotal: 0, // fixed below from filtered length
         imageSmall: image,
         imageLarge: image,
         marketPrice: market,
@@ -406,7 +524,11 @@ async function fetchCardsFromOptcgapi(setId: string): Promise<PokemonCard[]> {
     );
   }
 
-  return cards;
+  const total = cards.length;
+  return cards.map((c) => ({
+    ...c,
+    set: { ...c.set, id: setId, printedTotal: total, total },
+  }));
 }
 
 export type OnePieceFetchMeta = {
