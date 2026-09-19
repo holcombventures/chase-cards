@@ -1,5 +1,6 @@
 "use client";
 
+import type { KeyboardEvent } from "react";
 import Image from "next/image";
 import type { CardWithPrice } from "@/lib/types";
 import { formatPrice, formatPriceLabel, formatVariant } from "@/lib/prices";
@@ -11,6 +12,8 @@ type Props = {
   locked?: boolean;
   /** Chase-row foil/glow on unlocked ranked cards (#1–3 free, or all Premium chase) */
   foil?: boolean;
+  /** Open lightbox preview (unlocked tiles only) */
+  onOpen?: (card: CardWithPrice) => void;
 };
 
 function LockIcon({ className }: { className?: string }) {
@@ -54,10 +57,11 @@ function formatSetNumberLabel(card: CardWithPrice): string {
   return denom === null ? num : `${num}/${denom}`;
 }
 
-export function CardTile({ card, rank, locked = false, foil = false }: Props) {
+export function CardTile({ card, rank, locked = false, foil = false, onOpen }: Props) {
   const setLabel = formatSetNumberLabel(card);
   const hasPrice = card.marketPrice !== null;
   const showFoil = foil && !locked;
+  const openable = Boolean(onOpen) && !locked;
 
   return (
     <article
@@ -68,14 +72,30 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
           : showFoil
             ? "border-amber-400/35 shadow-amber-900/25 ring-1 ring-amber-400/20 hover:-translate-y-0.5 hover:border-amber-400/55 hover:shadow-amber-800/30"
             : "border-white/10 hover:-translate-y-0.5 hover:border-amber-400/40 hover:shadow-amber-900/20",
+        openable ? "cursor-pointer focus-within:ring-2 focus-within:ring-amber-300/60" : "",
       ].join(" ")}
       aria-label={
         locked
           ? typeof rank === "number"
             ? `Locked chase card #${rank}`
             : "Locked chase card"
-          : undefined
+          : openable
+            ? `View ${card.name}`
+            : undefined
       }
+      {...(openable
+        ? {
+            role: "button" as const,
+            tabIndex: 0,
+            onClick: () => onOpen?.(card),
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen?.(card);
+              }
+            },
+          }
+        : {})}
     >
       {showFoil ? (
         <div

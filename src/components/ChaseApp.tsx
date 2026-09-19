@@ -29,6 +29,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { SetSelector } from "./SetSelector";
 import { ViewToggle } from "./ViewToggle";
 import { CardTile } from "./CardTile";
+import { CardLightbox } from "./CardLightbox";
 import { StatusPanel } from "./StatusPanel";
 import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
@@ -210,6 +211,20 @@ export function ChaseApp() {
   const [setStats, setSetStats] = useState<SetStats | null>(null);
   /** Set id that current cards/error correspond to — detects first-paint race */
   const [cardsSetId, setCardsSetId] = useState("");
+
+  const [lightbox, setLightbox] = useState<{
+    card: CardWithPrice;
+    rank?: number;
+  } | null>(null);
+
+  const openLightbox = useCallback((card: CardWithPrice, rank?: number) => {
+    setLightbox({ card, rank });
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightbox(null);
+  }, []);
+
 
   const reloadSets = useCallback(async () => {
     if (!catalogLive) {
@@ -837,6 +852,12 @@ export function ChaseApp() {
                           card={card}
                           rank={mode === "chase" ? i + 1 : undefined}
                           foil={mode === "chase"}
+                          onOpen={(c) =>
+                            openLightbox(
+                              c,
+                              mode === "chase" ? i + 1 : undefined,
+                            )
+                          }
                         />
                       ))}
                     </div>
@@ -941,6 +962,14 @@ export function ChaseApp() {
           </>
         ) : null}
       </footer>
+
+      {lightbox ? (
+        <CardLightbox
+          card={lightbox.card}
+          rank={lightbox.rank}
+          onClose={closeLightbox}
+        />
+      ) : null}
     </div>
   );
 }
