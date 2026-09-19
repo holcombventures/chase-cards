@@ -46,23 +46,23 @@ function MetricCard({
         : "text-amber-200";
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-3 sm:px-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-white/10 bg-slate-950/50 px-2.5 py-2 sm:gap-1.5 sm:px-4 sm:py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 sm:text-[11px]">
         {label}
       </p>
       <div className="flex flex-wrap items-baseline gap-2">
-        <p className={`text-xl font-bold tracking-tight sm:text-2xl ${valueColor}`}>
+        <p className={`text-lg font-bold tracking-tight sm:text-2xl ${valueColor}`}>
           {metric.value}
         </p>
         {!isNa ? <TrendGlyph direction={metric.direction} /> : null}
       </div>
       {isNa && metric.naReason ? (
-        <p className="text-xs text-slate-400">{metric.naReason}</p>
+        <p className="line-clamp-2 text-[10px] text-slate-400 sm:text-xs">{metric.naReason}</p>
       ) : null}
       {metric.note ? (
-        <p className="text-[11px] text-slate-500">{metric.note}</p>
+        <p className="line-clamp-1 text-[10px] text-slate-500 sm:text-[11px]">{metric.note}</p>
       ) : null}
-      <p className="mt-auto pt-1 text-[10px] leading-snug text-amber-200/70">
+      <p className="mt-auto line-clamp-1 pt-0.5 text-[9px] leading-snug text-amber-200/70 sm:pt-1 sm:text-[10px]">
         {metric.source}
       </p>
     </div>
@@ -72,21 +72,21 @@ function MetricCard({
 export function SetStatsPanel({ stats, setName }: Props) {
   return (
     <section
-      className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-3 sm:p-4"
+      className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-2.5 sm:p-4"
       aria-label={setName ? `Set statistics for ${setName}` : "Set statistics"}
     >
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-amber-100">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1.5 sm:mb-3 sm:gap-2">
+        <h3 className="text-xs font-semibold text-amber-100 sm:text-sm">
           Set statistics
           {setName ? (
             <span className="ml-2 font-normal text-slate-400">· {setName}</span>
           ) : null}
         </h3>
-        <p className="text-[11px] text-slate-500">
+        <p className="hidden text-[11px] text-slate-500 sm:block">
           Free + Premium · sources labeled on every metric
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <MetricCard label="Total set value" metric={stats.totalSetValue} />
         <MetricCard label="Month-over-month" metric={stats.mom} />
       </div>

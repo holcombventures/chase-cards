@@ -1,4 +1,10 @@
+import type { CategoryId } from "@/lib/catalog/types";
 import type { CheckoutEntitlementKey } from "@/lib/stripe/catalog";
+
+export type StartCheckoutOptions = {
+  /** Required for Premium: which live category to unlock fully. */
+  premiumCategory?: CategoryId;
+};
 
 export type StartCheckoutResult =
   | { ok: true; url: string; sessionId: string }
@@ -15,32 +21,37 @@ export type StartCheckoutResult =
  */
 export async function startCheckout(
   entitlement: CheckoutEntitlementKey,
+  options?: StartCheckoutOptions,
 ): Promise<StartCheckoutResult> {
   try {
+    const body: Record<string, unknown> = { entitlement };
+    if (entitlement === "premium" && options?.premiumCategory) {
+      body.premiumCategory = options.premiumCategory;
+    }
     const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entitlement }),
+      body: JSON.stringify(body),
     });
-    const body = (await res.json().catch(() => ({}))) as {
+    const parsed = (await res.json().catch(() => ({}))) as {
       url?: string;
       sessionId?: string;
       error?: string;
       demoFallback?: boolean;
     };
 
-    if (res.ok && body.url) {
+    if (res.ok && parsed.url) {
       return {
         ok: true,
-        url: body.url,
-        sessionId: body.sessionId ?? "",
+        url: parsed.url,
+        sessionId: parsed.sessionId ?? "",
       };
     }
 
     return {
       ok: false,
-      demoFallback: Boolean(body.demoFallback) || res.status === 503,
-      error: body.error || `Checkout failed (${res.status})`,
+      demoFallback: Boolean(parsed.demoFallback) || res.status === 503,
+      error: parsed.error || `Checkout failed (${res.status})`,
       status: res.status,
     };
   } catch (err) {
@@ -56,6 +67,7 @@ export async function startCheckout(
 export type ConfirmCheckoutResult = {
   paid: boolean;
   entitlements: CheckoutEntitlementKey[];
+  premiumCategory?: CategoryId | null;
   error?: string;
 };
 
@@ -69,6 +81,8 @@ export async function confirmCheckoutSession(
     const body = (await res.json().catch(() => ({}))) as {
       paid?: boolean;
       entitlements?: string[];
+      premiumCategory?: string | null;
+      metadata?: Record<string, string>;
       error?: string;
     };
     if (!res.ok) {
@@ -83,9 +97,18 @@ export async function confirmCheckoutSession(
           (k): k is CheckoutEntitlementKey => typeof k === "string",
         ) as CheckoutEntitlementKey[])
       : [];
+    const fromBody = body.premiumCategory;
+    const fromMeta = body.metadata?.premium_category;
+    const rawCat =
+      typeof fromBody === "string"
+        ? fromBody
+        : typeof fromMeta === "string"
+          ? fromMeta
+          : null;
     return {
       paid: Boolean(body.paid),
       entitlements: keys,
+      premiumCategory: rawCat as CategoryId | null,
       error: body.error,
     };
   } catch (err) {

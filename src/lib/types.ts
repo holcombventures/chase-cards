@@ -41,10 +41,14 @@ export type PokemonCard = {
   };
 };
 
-export type PriceSource = "pokemontcg" | "tcgdex";
+export type PriceSource =
+  | "pokemontcg"
+  | "tcgdex"
+  | "optcg"
+  | "optcgapi";
 
 export type CardWithPrice = PokemonCard & {
-  /** Best usable TCGPlayer market price, or null if none */
+  /** Best usable market price (USD), or null if none */
   marketPrice: number | null;
   priceVariant: string | null;
   priceUpdatedAt: string | null;
@@ -52,7 +56,13 @@ export type CardWithPrice = PokemonCard & {
   priceSource?: PriceSource | null;
 };
 
-export type CardsMetaPriceSource = "pokemontcg" | "tcgdex" | "mixed" | "none";
+export type CardsMetaPriceSource =
+  | "pokemontcg"
+  | "tcgdex"
+  | "optcg"
+  | "optcgapi"
+  | "mixed"
+  | "none";
 
 export type ViewMode = "chase" | "all";
 

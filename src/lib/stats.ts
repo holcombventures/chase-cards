@@ -18,10 +18,14 @@ export function priceSourceLabel(source: CardsMetaPriceSource | null | undefined
       return "Source: Pokémon TCG API (TCGPlayer)";
     case "tcgdex":
       return "Source: TCGdex (TCGPlayer)";
+    case "optcg":
+      return "Source: OPTCG API (USD price field)";
+    case "optcgapi":
+      return "Source: optcgapi.com (market_price USD)";
     case "mixed":
       return "Source: mixed — Pokémon TCG API + TCGdex (TCGPlayer)";
     case "none":
-      return "Source: none (no usable TCGPlayer market prices)";
+      return "Source: none (no usable market prices)";
     default:
       return "Source: unknown";
   }
@@ -58,7 +62,11 @@ export function buildTotalSetValueMetric(
   );
   const pricedCount = priced.length;
   const sum = priced.reduce((acc, c) => acc + (c.marketPrice as number), 0);
-  const source = priceSourceLabel(priceSource);
+  // Never claim TCGPlayer / vendor sources when nothing is priced
+  const source =
+    pricedCount === 0 || priceSource === "none"
+      ? "Source: none (no usable market prices)"
+      : priceSourceLabel(priceSource);
 
   if (pricedCount === 0) {
     return {
@@ -163,9 +171,29 @@ export type BuildSetStatsInput = {
   tcgdexBundle?: TcgdexSetPriceBundle | null;
   /** True when we attempted / could use TCGdex for MoM */
   tcgdexAttempted?: boolean;
+  /**
+   * When set, MoM is forced to N/A (e.g. One Piece has no Cardmarket-style history).
+   * total set value is still computed from market prices.
+   */
+  momUnavailableReason?: string | null;
 };
 
 export function buildSetStats(input: BuildSetStatsInput): SetStats {
+  const totalSetValue = buildTotalSetValueMetric(input.cards, input.priceSource);
+
+  if (input.momUnavailableReason) {
+    return {
+      totalSetValue,
+      mom: {
+        value: "N/A",
+        naReason: input.momUnavailableReason,
+        source: "Source: N/A — no Cardmarket-style history for this catalog",
+        direction: null,
+        percent: null,
+      },
+    };
+  }
+
   const releaseDate =
     input.releaseDate ?? input.tcgdexBundle?.releaseDate ?? null;
 
@@ -176,7 +204,7 @@ export function buildSetStats(input: BuildSetStatsInput): SetStats {
   const tcgdexAvailable = Boolean(input.tcgdexBundle);
 
   return {
-    totalSetValue: buildTotalSetValueMetric(input.cards, input.priceSource),
+    totalSetValue,
     mom: buildMomMetric(cardmarketHits, {
       releaseDate,
       tcgdexAvailable: input.tcgdexAttempted === false ? false : tcgdexAvailable,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchCardsBySet, PokemonTcgApiError } from "@/lib/api";
-import { enrichCard } from "@/lib/prices";
+import { PokemonTcgApiError } from "@/lib/api";
+import { enrichCard, normalizeCardsSetTotals } from "@/lib/prices";
 import {
   fetchTcgdexFallbackPrices,
   fetchTcgdexOnlyCards,
@@ -8,17 +8,38 @@ import {
   lookupTcgdexPrice,
 } from "@/lib/tcgdex";
 import { buildSetStats } from "@/lib/stats";
-import type { CardWithPrice, CardsMetaPriceSource } from "@/lib/types";
+import type { CardWithPrice, CardsMetaPriceSource, PriceSource } from "@/lib/types";
+import {
+  assertLiveCatalog,
+  hasCatalogAdapter,
+  isCategoryId,
+  type CategoryId,
+} from "@/lib/catalog";
+import * as pokemonCatalog from "@/lib/catalog/pokemon";
+import * as onePieceCatalog from "@/lib/catalog/one-piece";
+import { OnePieceApiError } from "@/lib/catalog/one-piece";
 
 type Params = { params: Promise<{ setId: string }> };
 
-function computePriceSource(cards: CardWithPrice[]): CardsMetaPriceSource {
+function parseCategory(request: Request): CategoryId {
+  const url = new URL(request.url);
+  const raw = url.searchParams.get("category") || "pokemon";
+  if (!isCategoryId(raw) || !hasCatalogAdapter(raw)) {
+    throw new Response(
+      JSON.stringify({ error: "Invalid or non-live category." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  return raw;
+}
+
+function computePokemonPriceSource(cards: CardWithPrice[]): CardsMetaPriceSource {
   let hasPrimary = false;
   let hasFallback = false;
   for (const c of cards) {
     if (c.marketPrice === null) continue;
     if (c.priceSource === "tcgdex") hasFallback = true;
-    else hasPrimary = true; // pokemontcg or unset (primary path)
+    else hasPrimary = true;
   }
   if (hasPrimary && hasFallback) return "mixed";
   if (hasFallback) return "tcgdex";
@@ -29,7 +50,7 @@ function computePriceSource(cards: CardWithPrice[]): CardsMetaPriceSource {
 async function applyTcgdexPriceFallback(
   cards: CardWithPrice[],
   setId: string,
-  setName: string | null
+  setName: string | null,
 ): Promise<{
   cards: CardWithPrice[];
   pricedCount: number;
@@ -55,7 +76,7 @@ async function applyTcgdexPriceFallback(
           const hit = lookupTcgdexPrice(
             fallback.prices,
             card.number,
-            card.name
+            card.name,
           );
           if (!hit) return card;
           return {
@@ -92,6 +113,169 @@ async function applyTcgdexPriceFallback(
   };
 }
 
+async function handlePokemon(
+  setId: string,
+  releaseDateParam: string | null,
+  setNameParam: string | null,
+) {
+  let cards: CardWithPrice[] = [];
+  let primaryFailed = false;
+
+  try {
+    const raw = await pokemonCatalog.fetchCards(setId);
+    cards = normalizeCardsSetTotals(
+      raw.map((card) => {
+        const enriched = enrichCard(card);
+        return {
+          ...enriched,
+          priceSource:
+            enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
+        };
+      }),
+    );
+  } catch (err) {
+    if (err instanceof PokemonTcgApiError) {
+      primaryFailed = true;
+      console.warn(
+        `pokemontcg cards failed for ${setId} (${err.status}); trying TCGdex-only catalog`,
+      );
+    } else {
+      throw err;
+    }
+  }
+
+  // Empty primary payload (or hard upstream failure) → TCGdex-only catalog
+  if (primaryFailed || cards.length === 0) {
+    try {
+      const only = await fetchTcgdexOnlyCards(
+        setId,
+        setNameParam || cards[0]?.set?.name || null,
+      );
+      if (only && only.cards.length > 0) {
+        const onlyCards = normalizeCardsSetTotals(only.cards);
+        const priceSource = computePokemonPriceSource(onlyCards);
+        const releaseDate =
+          releaseDateParam || only.bundle.releaseDate || null;
+        const pricedCount = onlyCards.filter(
+          (c) => c.marketPrice !== null,
+        ).length;
+        const stats = buildSetStats({
+          cards: onlyCards,
+          priceSource,
+          releaseDate,
+          tcgdexBundle: only.bundle,
+          tcgdexAttempted: true,
+        });
+        return NextResponse.json({
+          data: onlyCards,
+          meta: {
+            category: "pokemon",
+            total: onlyCards.length,
+            pricedCount,
+            missingPriceCount: onlyCards.length - pricedCount,
+            priceSource,
+            fallbackUsed: true,
+            releaseDate,
+            stats,
+            catalogSource: "tcgdex",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("TCGdex-only catalog failed:", err);
+    }
+
+    if (primaryFailed) {
+      return NextResponse.json(
+        {
+          error:
+            "Pokémon TCG API is temporarily unavailable for this set, and no TCGdex fallback catalog was found. Please retry.",
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  const setName = setNameParam || cards[0]?.set?.name || null;
+  const applied = await applyTcgdexPriceFallback(cards, setId, setName);
+  cards = normalizeCardsSetTotals(applied.cards);
+
+  const priceSource = computePokemonPriceSource(cards);
+  const releaseDate =
+    releaseDateParam || applied.tcgdexBundle?.releaseDate || null;
+
+  const stats = buildSetStats({
+    cards,
+    priceSource,
+    releaseDate,
+    tcgdexBundle: applied.tcgdexBundle,
+    tcgdexAttempted: applied.tcgdexAttempted,
+  });
+
+  return NextResponse.json({
+    data: cards,
+    meta: {
+      category: "pokemon",
+      total: cards.length,
+      pricedCount: applied.pricedCount,
+      missingPriceCount: cards.length - applied.pricedCount,
+      priceSource,
+      fallbackUsed: applied.fallbackUsed,
+      releaseDate,
+      stats,
+      catalogSource: "pokemontcg",
+    },
+  });
+}
+
+async function handleOnePiece(
+  setId: string,
+  releaseDateParam: string | null,
+) {
+  const { cards: raw, meta: fetchMeta } = await onePieceCatalog.fetchCards(setId);
+  const backend: PriceSource = fetchMeta.priceBackend;
+
+  const cards: CardWithPrice[] = normalizeCardsSetTotals(
+    raw.map((card) => {
+      const enriched = enrichCard(card);
+      return {
+        ...enriched,
+        priceSource: enriched.marketPrice !== null ? backend : null,
+      };
+    }),
+  );
+
+  const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
+  const priceSource: CardsMetaPriceSource =
+    pricedCount > 0 ? backend : "none";
+
+  const stats = buildSetStats({
+    cards,
+    priceSource,
+    releaseDate: releaseDateParam,
+    tcgdexBundle: null,
+    tcgdexAttempted: false,
+    momUnavailableReason:
+      "One Piece catalog has no Cardmarket-style ~30-day history",
+  });
+
+  return NextResponse.json({
+    data: cards,
+    meta: {
+      category: "one-piece",
+      total: cards.length,
+      pricedCount,
+      missingPriceCount: cards.length - pricedCount,
+      priceSource,
+      fallbackUsed: false,
+      usedOptcgKey: fetchMeta.usedOptcgKey,
+      priceBackend: fetchMeta.priceBackend,
+      releaseDate: releaseDateParam,
+      stats,
+    },
+  });
+}
+
 export async function GET(request: Request, { params }: Params) {
   const { setId } = await params;
 
@@ -99,125 +283,41 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid set id." }, { status: 400 });
   }
 
+  let category: CategoryId;
+  try {
+    category = parseCategory(request);
+  } catch (res) {
+    if (res instanceof Response) return res;
+    throw res;
+  }
+
   const url = new URL(request.url);
   const releaseDateParam = url.searchParams.get("releaseDate");
   const setNameParam = url.searchParams.get("setName");
 
   try {
-    let cards: CardWithPrice[] = [];
-    let primaryFailed = false;
-
-    try {
-      const raw = await fetchCardsBySet(setId);
-      cards = raw.map((card) => {
-        const enriched = enrichCard(card);
-        return {
-          ...enriched,
-          priceSource:
-            enriched.marketPrice !== null ? ("pokemontcg" as const) : null,
-        };
-      });
-    } catch (err) {
-      if (err instanceof PokemonTcgApiError) {
-        primaryFailed = true;
-        console.warn(
-          `pokemontcg cards failed for ${setId} (${err.status}); trying TCGdex-only catalog`
-        );
-      } else {
-        throw err;
-      }
+    assertLiveCatalog(category);
+    if (category === "one-piece") {
+      return await handleOnePiece(setId, releaseDateParam);
     }
-
-    // Empty primary payload (or hard upstream failure) → TCGdex-only catalog
-    if (primaryFailed || cards.length === 0) {
-      try {
-        const only = await fetchTcgdexOnlyCards(
-          setId,
-          setNameParam || cards[0]?.set?.name || null
-        );
-        if (only && only.cards.length > 0) {
-          const priceSource = computePriceSource(only.cards);
-          const releaseDate =
-            releaseDateParam || only.bundle.releaseDate || null;
-          const pricedCount = only.cards.filter(
-            (c) => c.marketPrice !== null
-          ).length;
-          const stats = buildSetStats({
-            cards: only.cards,
-            priceSource,
-            releaseDate,
-            tcgdexBundle: only.bundle,
-            tcgdexAttempted: true,
-          });
-          return NextResponse.json({
-            data: only.cards,
-            meta: {
-              total: only.cards.length,
-              pricedCount,
-              missingPriceCount: only.cards.length - pricedCount,
-              priceSource,
-              fallbackUsed: true,
-              releaseDate,
-              stats,
-              catalogSource: "tcgdex",
-            },
-          });
-        }
-      } catch (err) {
-        console.error("TCGdex-only catalog failed:", err);
-      }
-
-      if (primaryFailed) {
-        return NextResponse.json(
-          {
-            error:
-              "Pokémon TCG API is temporarily unavailable for this set, and no TCGdex fallback catalog was found. Please retry.",
-          },
-          { status: 502 }
-        );
-      }
-    }
-
-    const setName = setNameParam || cards[0]?.set?.name || null;
-    const applied = await applyTcgdexPriceFallback(cards, setId, setName);
-    cards = applied.cards;
-
-    const priceSource = computePriceSource(cards);
-    const releaseDate =
-      releaseDateParam || applied.tcgdexBundle?.releaseDate || null;
-
-    const stats = buildSetStats({
-      cards,
-      priceSource,
-      releaseDate,
-      tcgdexBundle: applied.tcgdexBundle,
-      tcgdexAttempted: applied.tcgdexAttempted,
-    });
-
-    return NextResponse.json({
-      data: cards,
-      meta: {
-        total: cards.length,
-        pricedCount: applied.pricedCount,
-        missingPriceCount: cards.length - applied.pricedCount,
-        priceSource,
-        fallbackUsed: applied.fallbackUsed,
-        releaseDate,
-        stats,
-        catalogSource: "pokemontcg",
-      },
-    });
+    return await handlePokemon(setId, releaseDateParam, setNameParam);
   } catch (err) {
     if (err instanceof PokemonTcgApiError) {
       return NextResponse.json(
         { error: err.message },
-        { status: err.status === 429 ? 429 : 502 }
+        { status: err.status === 429 ? 429 : 502 },
+      );
+    }
+    if (err instanceof OnePieceApiError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: err.status === 429 ? 429 : 502 },
       );
     }
     console.error(err);
     return NextResponse.json(
-      { error: "Unexpected error loading cards from the Pokémon TCG API." },
-      { status: 500 }
+      { error: "Unexpected error loading cards." },
+      { status: 500 },
     );
   }
 }

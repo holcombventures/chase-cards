@@ -1,18 +1,74 @@
 import { NextResponse } from "next/server";
-import { fetchAllSets, PokemonTcgApiError } from "@/lib/api";
+import { PokemonTcgApiError } from "@/lib/api";
+import {
+  assertLiveCatalog,
+  hasCatalogAdapter,
+  isCategoryId,
+  type CategoryId,
+} from "@/lib/catalog";
+import * as pokemonCatalog from "@/lib/catalog/pokemon";
+import * as onePieceCatalog from "@/lib/catalog/one-piece";
+import { OnePieceApiError } from "@/lib/catalog/one-piece";
 
-export async function GET() {
+function parseCategory(request: Request): CategoryId {
+  const url = new URL(request.url);
+  const raw = url.searchParams.get("category") || "pokemon";
+  if (!isCategoryId(raw)) {
+    throw new Response(JSON.stringify({ error: "Invalid category." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (!hasCatalogAdapter(raw)) {
+    throw new Response(
+      JSON.stringify({
+        error: `Catalog for ${raw} is not live yet.`,
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+  return raw;
+}
+
+export async function GET(request: Request) {
+  let category: CategoryId;
   try {
-    const sets = await fetchAllSets();
-    return NextResponse.json({ data: sets });
+    category = parseCategory(request);
+  } catch (res) {
+    if (res instanceof Response) return res;
+    throw res;
+  }
+
+  try {
+    const adapterId = assertLiveCatalog(category);
+    const sets =
+      adapterId === "one-piece"
+        ? await onePieceCatalog.fetchSets()
+        : await pokemonCatalog.fetchSets();
+    return NextResponse.json({
+      data: sets,
+      meta: { category: adapterId },
+    });
   } catch (err) {
     if (err instanceof PokemonTcgApiError) {
-      return NextResponse.json({ error: err.message }, { status: err.status === 429 ? 429 : 502 });
+      return NextResponse.json(
+        { error: err.message },
+        { status: err.status === 429 ? 429 : 502 },
+      );
+    }
+    if (err instanceof OnePieceApiError) {
+      return NextResponse.json(
+        { error: err.message },
+        { status: err.status === 429 ? 429 : 502 },
+      );
     }
     console.error(err);
     return NextResponse.json(
-      { error: "Unexpected error loading sets from the Pokémon TCG API." },
-      { status: 500 }
+      { error: "Unexpected error loading sets." },
+      { status: 500 },
     );
   }
 }

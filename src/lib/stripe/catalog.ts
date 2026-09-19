@@ -6,6 +6,7 @@
 export type CheckoutEntitlementKey =
   | "premium"
   | "all_access"
+  | "pokemon"
   | "one-piece"
   | "mtg"
   | "sports"
@@ -33,6 +34,7 @@ export const SPORT_ADDON_IDS: readonly SportAddonId[] = [
 export const CHECKOUT_ENTITLEMENT_KEYS: readonly CheckoutEntitlementKey[] = [
   "premium",
   "all_access",
+  "pokemon",
   "one-piece",
   "mtg",
   "sports",
@@ -47,6 +49,7 @@ export const CHECKOUT_ENTITLEMENT_KEYS: readonly CheckoutEntitlementKey[] = [
 export const PRICE_ENV_BY_ENTITLEMENT: Record<CheckoutEntitlementKey, string> = {
   premium: "STRIPE_PRICE_PREMIUM",
   all_access: "STRIPE_PRICE_ALL_ACCESS",
+  pokemon: "STRIPE_PRICE_POKEMON",
   "one-piece": "STRIPE_PRICE_ONE_PIECE",
   mtg: "STRIPE_PRICE_MTG",
   sports: "STRIPE_PRICE_SPORTS",
@@ -60,6 +63,7 @@ export const PRICE_ENV_BY_ENTITLEMENT: Record<CheckoutEntitlementKey, string> = 
 export const ENTITLEMENT_LABELS: Record<CheckoutEntitlementKey, string> = {
   premium: "Premium",
   all_access: "All Access",
+  pokemon: "Pokémon add-on",
   "one-piece": "One Piece add-on",
   mtg: "MTG add-on",
   sports: "Sports add-on",
