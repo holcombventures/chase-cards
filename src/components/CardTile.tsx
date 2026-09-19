@@ -152,7 +152,7 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
               aria-hidden
             >
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Market price
+                Price
               </p>
               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-slate-500">
                 <LockIcon className="h-3.5 w-3.5 shrink-0 text-amber-200/70" />
@@ -162,11 +162,10 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
           ) : hasPrice ? (
             <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-2.5 py-2 shadow-inner shadow-amber-950/20">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/70">
-                Market
                 {card.priceVariant &&
                 card.priceVariant.toLowerCase() !== "market"
-                  ? ` · ${formatVariant(card.priceVariant)}`
-                  : ""}
+                  ? formatVariant(card.priceVariant)
+                  : "Price"}
               </p>
               <p className="text-xl font-bold tabular-nums leading-tight text-amber-300 sm:text-2xl">
                 {formatPrice(card.marketPrice)}
@@ -175,7 +174,7 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
           ) : (
             <div className="rounded-lg border border-white/10 bg-slate-950/40 px-2.5 py-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Market price
+                Price
               </p>
               <p className="text-sm font-medium text-slate-400">
                 {formatPriceLabel(null)}

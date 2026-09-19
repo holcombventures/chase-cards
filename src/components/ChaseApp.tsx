@@ -33,7 +33,7 @@ import { StatusPanel } from "./StatusPanel";
 import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
-import { Hero, CHASE_SECTION_ID } from "./Hero";
+import { Hero, CHASE_SECTION_ID, SET_CHROME_SECTION_ID } from "./Hero";
 import { EntitlementShop } from "./EntitlementShop";
 import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
@@ -575,7 +575,9 @@ export function ChaseApp() {
 
       {catalogLive && !setsLoading && !setsError && sets.length > 0 ? (
         <section
-          className="rounded-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 p-4 shadow-lg shadow-black/25 sm:p-5"
+          id={SET_CHROME_SECTION_ID}
+          tabIndex={-1}
+          className="scroll-mt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] rounded-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 p-4 shadow-lg shadow-black/25 outline-none sm:scroll-mt-28 sm:p-5"
           aria-label="Set picker"
         >
           <SetSelector
@@ -701,7 +703,7 @@ export function ChaseApp() {
               <div
                 id={CHASE_SECTION_ID}
                 tabIndex={-1}
-                className="scroll-mt-28 space-y-4 outline-none"
+                className="scroll-mt-24 space-y-4 outline-none sm:scroll-mt-28"
               >
               {mode === "chase" && chaseCards.length === 0 ? (
                 <StatusPanel

@@ -17,6 +17,8 @@ import {
 } from "@/lib/catalog/types";
 
 const CHASE_SECTION_ID = "chase";
+/** Try free lands here — Choose set / toggles / stats frame on mobile */
+const SET_CHROME_SECTION_ID = "set-chrome";
 
 type Props = {
   top3: CardWithPrice[];
@@ -38,9 +40,13 @@ type Props = {
   children?: ReactNode;
 };
 
-function scrollToChaseCollection() {
+function scrollToTryFreeFrame() {
   if (typeof document === "undefined") return;
-  const el = document.getElementById(CHASE_SECTION_ID);
+  // Prefer set chrome so mobile keeps Choose set + toggles + stats in view,
+  // with "Top 3 chase" near the bottom — not slammed to the top.
+  const el =
+    document.getElementById(SET_CHROME_SECTION_ID) ||
+    document.getElementById(CHASE_SECTION_ID);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
   if (typeof el.focus === "function") {
@@ -151,7 +157,7 @@ export function Hero({
     onTryFree?.();
     // Defer scroll so chase mode / DOM updates land before scrollIntoView
     requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToChaseCollection);
+      requestAnimationFrame(scrollToTryFreeFrame);
     });
   };
   const showCollage = !loading && top3.length > 0;
@@ -317,4 +323,4 @@ export function Hero({
   );
 }
 
-export { CHASE_SECTION_ID };
+export { CHASE_SECTION_ID, SET_CHROME_SECTION_ID };
