@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Chase Cards — See the expensive chase before you buy the box",
   description:
-    "Free unlocks the top 3 chase cards. Premium opens the full set. Live for Pokémon and One Piece English.",
+    "Free unlocks the top 3 chase cards. Premium opens the full set. Pokémon is live; more categories coming soon.",
 };
 
 export const viewport: Viewport = {
