@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import type { CardWithPrice } from "@/lib/types";
-import { formatPrice } from "@/lib/prices";
+import { formatPrice, formatPriceLabel } from "@/lib/prices";
 import {
   FREE_CHASE_LIMIT,
   PREMIUM_PRICE_LABEL,
@@ -21,6 +21,8 @@ const CHASE_SECTION_ID = "chase";
 type Props = {
   top3: CardWithPrice[];
   loading: boolean;
+  /** When true, collage top-3 are estimated (unpriced / new set) */
+  estimated?: boolean;
   entitlementsReady: boolean;
   entitlements: EntitlementsState;
   badge: string | null;
@@ -80,10 +82,10 @@ function CollageCard({
   const hasPrice = card.marketPrice !== null;
   const offsetClass =
     offset === "left"
-      ? "-translate-x-[70%] -rotate-6"
+      ? "z-[1] -translate-x-[70%] -rotate-6"
       : offset === "right"
-        ? "translate-x-[70%] rotate-6"
-        : "z-10 -translate-y-2";
+        ? "z-[1] translate-x-[70%] rotate-6"
+        : "z-20 -translate-y-3";
 
   return (
     <div
@@ -98,19 +100,31 @@ function CollageCard({
           alt={card.name}
           fill
           sizes="(max-width: 640px) 38vw, 180px"
-          className="object-contain p-1.5"
+          className="object-contain p-1.5 pb-8"
           unoptimized
         />
-        <div className="absolute left-1.5 top-1.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-slate-950 shadow">
+        <div className="absolute left-1.5 top-1.5 z-10 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-slate-950 shadow">
           #{rank}
         </div>
-        {hasPrice ? (
-          <div className="absolute bottom-1.5 left-1.5 right-1.5 rounded-md border border-amber-400/30 bg-slate-950/85 px-1.5 py-1 text-center backdrop-blur-sm">
-            <p className="text-[10px] font-bold tabular-nums text-amber-300 sm:text-xs">
-              {formatPrice(card.marketPrice)}
-            </p>
-          </div>
-        ) : null}
+        <div
+          className={[
+            "absolute bottom-1.5 left-1.5 right-1.5 z-10 rounded-md border px-1.5 py-1 text-center backdrop-blur-sm",
+            hasPrice
+              ? "border-amber-400/30 bg-slate-950/90"
+              : "border-white/15 bg-slate-950/90",
+          ].join(" ")}
+        >
+          <p
+            className={[
+              "truncate text-[10px] font-bold tabular-nums sm:text-xs",
+              hasPrice ? "text-amber-300" : "text-slate-300",
+            ].join(" ")}
+          >
+            {hasPrice
+              ? formatPrice(card.marketPrice)
+              : formatPriceLabel(null)}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -119,6 +133,7 @@ function CollageCard({
 export function Hero({
   top3,
   loading,
+  estimated = false,
   entitlementsReady,
   entitlements,
   badge,
@@ -258,26 +273,33 @@ export function Hero({
           </div>
         </div>
 
-        <div
-          className="relative mx-auto flex h-44 w-full max-w-md items-end justify-center sm:h-56 sm:max-w-lg lg:mx-0 lg:h-64 lg:max-w-none"
-          aria-label={
-            showCollage
-              ? `Top ${Math.min(FREE_CHASE_LIMIT, top3.length)} chase cards`
-              : "Chase card collage loading"
-          }
-        >
-          {showCollage ? (
-            top3.slice(0, FREE_CHASE_LIMIT).map((card, i) => (
-              <CollageCard
-                key={card.id}
-                card={card}
-                rank={i + 1}
-                offset={offsets[i] ?? "center"}
-              />
-            ))
-          ) : (
-            <CollageSkeleton />
-          )}
+        <div className="flex flex-col items-center gap-2 lg:items-stretch">
+          <div
+            className="relative mx-auto flex h-48 w-full max-w-md items-end justify-center sm:h-60 sm:max-w-lg lg:mx-0 lg:h-64 lg:max-w-none"
+            aria-label={
+              showCollage
+                ? `Top ${Math.min(FREE_CHASE_LIMIT, top3.length)} chase cards${estimated ? " (estimated)" : ""}`
+                : "Chase card collage loading"
+            }
+          >
+            {showCollage ? (
+              top3.slice(0, FREE_CHASE_LIMIT).map((card, i) => (
+                <CollageCard
+                  key={card.id}
+                  card={card}
+                  rank={i + 1}
+                  offset={offsets[i] ?? "center"}
+                />
+              ))
+            ) : (
+              <CollageSkeleton />
+            )}
+          </div>
+          {showCollage && estimated ? (
+            <p className="text-center text-[11px] font-medium text-sky-200/90">
+              Estimated chase · prices coming when market data lands
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import type {
   ViewMode,
 } from "@/lib/types";
 import { selectChaseCards, sortBySetNumber } from "@/lib/prices";
+
 import {
   DEFAULT_CATEGORY_ID,
   LIVE_CATALOG_IDS,
@@ -365,7 +366,13 @@ export function ChaseApp() {
     setCardsError(null);
   }, []);
 
-  const chaseCards = useMemo(() => selectChaseCards(cards), [cards]);
+  const chaseSelection = useMemo(
+    () => selectChaseCards(cards, { categoryId }),
+    [cards, categoryId],
+  );
+  const chaseCards = chaseSelection.cards;
+  const chaseMode = chaseSelection.mode;
+  const chaseNote = chaseSelection.note;
   const allSorted = useMemo(() => sortBySetNumber(cards), [cards]);
 
   const freeChaseVisible = useMemo(
@@ -507,6 +514,7 @@ export function ChaseApp() {
       <Hero
         top3={freeChaseVisible}
         loading={catalogLive && (setsLoading || cardsLoading)}
+        estimated={chaseMode === "estimated" && freeChaseVisible.length > 0}
         entitlementsReady={entitlementsReady}
         entitlements={entitlements}
         badge={badge}
@@ -662,11 +670,7 @@ export function ChaseApp() {
                 <StatusPanel
                   variant="empty"
                   title="No chase cards"
-                  message={
-                    isPokemon && fallbackUsed
-                      ? `This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but neither the Pokémon TCG API nor TCGdex returned a usable TCGPlayer market price. Switch to Entire set to browse them, or try another set.`
-                      : `This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but none have a usable market price. Switch to Entire set to browse them, or try another set.`
-                  }
+                  message={`This set has ${cards.length} card${cards.length === 1 ? "" : "s"}, but chase ranking could not be determined. Switch to Entire set to browse them, or try another set.`}
                 />
               ) : showEntireSetPaywall ? (
                 <>
@@ -695,20 +699,30 @@ export function ChaseApp() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="space-y-1">
-                      <h2 className="text-lg font-semibold text-white sm:text-xl">
-                        {mode === "chase"
-                          ? fullAccessHere
-                            ? "Chase cards"
-                            : "Top 3 chase"
-                          : "Entire set"}
-                        {selectedSet ? (
-                          <span className="ml-2 text-base font-normal text-slate-400">
-                            · {selectedSet.name}
+                      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-white sm:text-xl">
+                        <span>
+                          {mode === "chase"
+                            ? fullAccessHere
+                              ? "Chase cards"
+                              : "Top 3 chase"
+                            : "Entire set"}
+                          {selectedSet ? (
+                            <span className="ml-2 text-base font-normal text-slate-400">
+                              · {selectedSet.name}
+                            </span>
+                          ) : null}
+                        </span>
+                        {mode === "chase" && chaseMode === "estimated" ? (
+                          <span className="rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-200">
+                            Estimated chase
                           </span>
                         ) : null}
                       </h2>
                       <p className="text-xs text-slate-400">
                         {pricedCount} of {cards.length} cards have market prices
+                        {chaseMode === "estimated" && mode === "chase"
+                          ? " · ranked by historical patterns"
+                          : ""}
                         {chaseSubtitle}
                       </p>
                     </div>
@@ -758,6 +772,11 @@ export function ChaseApp() {
                       {priceSource === "optcg"
                         ? "Prices via OPTCG API (USD)"
                         : "Prices via optcgapi.com (market_price USD) · OPTCG key optional for primary host"}
+                    </p>
+                  ) : null}
+                  {mode === "chase" && chaseMode === "estimated" && chaseNote ? (
+                    <p className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-3 py-2 text-xs text-sky-100/90">
+                      {chaseNote}
                     </p>
                   ) : null}
                   {displayed.length > 0 ? (

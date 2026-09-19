@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import type { CardWithPrice } from "@/lib/types";
-import { formatPrice, formatVariant } from "@/lib/prices";
+import { formatPrice, formatPriceLabel, formatVariant } from "@/lib/prices";
 
 type Props = {
   card: CardWithPrice;
@@ -87,7 +87,7 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
       {!locked && card.rarity ? (
         <div
           className={[
-            "absolute z-10 max-w-[55%] truncate rounded-md border border-white/15 bg-slate-950/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-100 backdrop-blur-sm",
+            "absolute z-10 max-w-[calc(100%-3.5rem)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-white/15 bg-slate-950/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-100 backdrop-blur-sm",
             typeof rank === "number" ? "right-2 top-2" : "left-2 top-2",
           ].join(" ")}
           title={card.rarity}
@@ -163,8 +163,11 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Market price
               </p>
-              <p className="text-sm font-medium text-slate-500">
-                Price unavailable
+              <p className="text-sm font-medium text-slate-400">
+                {formatPriceLabel(null)}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Pricing not available yet
               </p>
             </div>
           )}

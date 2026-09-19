@@ -40,19 +40,184 @@ export function enrichCard(card: PokemonCard): CardWithPrice {
   return { ...card, ...price };
 }
 
+export type ChaseMode = "priced" | "estimated";
+
+export type ChaseSelection = {
+  cards: CardWithPrice[];
+  mode: ChaseMode;
+  /** Set-level note when chase is estimated from historical patterns */
+  note?: string | null;
+};
+
+export type SelectChaseOptions = {
+  /** Live catalog id — drives rarity heuristics when prices are missing */
+  categoryId?: string | null;
+};
+
+export const ESTIMATED_CHASE_NOTE =
+  "New set — chase estimated from historical patterns; prices coming when market data lands.";
+
+/** Minimum usable market prices before we prefer priced ranking over estimate. */
+const MIN_PRICED_FOR_RANK = 1;
+
 /**
- * Chase cards = top 20% of cards that have a usable market price,
- * rounded up (ceil), with a minimum of 1 when the priced set is non-empty.
+ * Chase selection — single source of truth.
+ *
+ * - If ≥1 card has a usable marketPrice: top ceil(priced*20%) by price (`priced`).
+ * - Else if the set has cards: top ceil(n*20%) by heuristic score (`estimated`).
+ * - Else empty (`priced`, no cards).
+ *
+ * Never invents dollar amounts — marketPrice stays whatever enrichment set.
  */
-export function selectChaseCards(cards: CardWithPrice[]): CardWithPrice[] {
+export function selectChaseCards(
+  cards: CardWithPrice[],
+  options?: SelectChaseOptions,
+): ChaseSelection {
+  if (!cards.length) {
+    return { cards: [], mode: "priced", note: null };
+  }
+
   const priced = cards
     .filter((c) => c.marketPrice !== null)
     .sort((a, b) => (b.marketPrice as number) - (a.marketPrice as number));
 
-  if (priced.length === 0) return [];
+  if (priced.length >= MIN_PRICED_FOR_RANK) {
+    const count = Math.max(1, Math.ceil(priced.length * 0.2));
+    return {
+      cards: priced.slice(0, count),
+      mode: "priced",
+      note: null,
+    };
+  }
 
-  const count = Math.max(1, Math.ceil(priced.length * 0.2));
-  return priced.slice(0, count);
+  const categoryId = resolveCategoryId(cards, options?.categoryId);
+  const scored = [...cards].sort((a, b) => {
+    const diff =
+      estimateChaseScore(b, categoryId) - estimateChaseScore(a, categoryId);
+    if (diff !== 0) return diff;
+    // Stable tie-break: higher collector number first, then name
+    const an = parseSetNumber(a.number).num;
+    const bn = parseSetNumber(b.number).num;
+    if (an !== bn) return bn - an;
+    return a.name.localeCompare(b.name);
+  });
+
+  const count = Math.max(1, Math.ceil(cards.length * 0.2));
+  return {
+    cards: scored.slice(0, count),
+    mode: "estimated",
+    note: ESTIMATED_CHASE_NOTE,
+  };
+}
+
+function resolveCategoryId(
+  cards: CardWithPrice[],
+  explicit?: string | null,
+): string {
+  if (explicit) return explicit;
+  const setId = (cards[0]?.set?.id || cards[0]?.id || "").toLowerCase();
+  if (setId.startsWith("op") || setId.includes("one-piece") || setId.includes("onepiece")) {
+    return "one-piece";
+  }
+  return "pokemon";
+}
+
+/**
+ * Heuristic chase score for unpriced / new sets.
+ * Ranking only — does not assign marketPrice.
+ */
+export function estimateChaseScore(
+  card: CardWithPrice,
+  categoryId: string = "pokemon",
+): number {
+  if (categoryId === "one-piece") {
+    return scoreOnePiece(card);
+  }
+  return scorePokemon(card);
+}
+
+function scorePokemon(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase();
+  const name = (card.name || "").toLowerCase();
+  const number = card.number || "";
+  const numberUpper = number.toUpperCase();
+
+  // High-value rarity strings (historical chase patterns)
+  if (/special\s*illustration\s*rare|\bsir\b/.test(rarity)) score += 100;
+  else if (/illustration\s*rare|\bir\b/.test(rarity)) score += 85;
+  else if (/hyper\s*rare|rare\s*rainbow|rainbow\s*rare/.test(rarity)) score += 90;
+  else if (/secret\s*rare|rare\s*secret/.test(rarity)) score += 80;
+  else if (/amazing\s*rare/.test(rarity)) score += 70;
+  else if (/ace\s*spec/.test(rarity) || /ace\s*spec/.test(name)) score += 75;
+  else if (/ultra\s*rare/.test(rarity)) score += 55;
+  else if (/trainer\s*gallery/.test(rarity) || /trainer\s*gallery/.test(name))
+    score += 65;
+  else if (/rare\s*holo\s*v|rare\s*holo\s*ex|double\s*rare/.test(rarity))
+    score += 40;
+  else if (/rare\s*holo|holo\s*rare/.test(rarity)) score += 25;
+  else if (/rare/.test(rarity)) score += 10;
+
+  if (/\bgold\b|\bhyper\b/.test(rarity)) score += 15;
+
+  // Secret numbering: collector # above printed total
+  const printed = card.set?.printedTotal ?? 0;
+  const parsed = parseSetNumber(number);
+  if (printed > 0 && Number.isFinite(parsed.num) && parsed.num > printed) {
+    score += 50;
+  }
+
+  // Extra subsets often chase-heavy (Galarian Gallery, Trainer Gallery, etc.)
+  if (/^(GG|TG)\d+/i.test(number) || /\b(GG|TG)\d+/i.test(numberUpper)) {
+    score += 35;
+  }
+  if (/^SV\d+/i.test(number) || /sv\s*alt/i.test(name)) {
+    score += 20;
+  }
+
+  // High collector numbers relative to set size (top of set)
+  if (printed > 0 && parsed.num > 0) {
+    const ratio = parsed.num / printed;
+    if (ratio >= 0.95) score += 15;
+    else if (ratio >= 0.85) score += 8;
+  }
+
+  return score;
+}
+
+function scoreOnePiece(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase();
+  const name = (card.name || "").toLowerCase();
+  const number = (card.number || "").toUpperCase();
+
+  // Conservative chase-like rarities
+  if (/\bsec\b|secret/.test(rarity) || /\bsec\b/.test(number)) score += 95;
+  if (/\bsp\b|special\s*rare|super\s*parallel/.test(rarity) || /-SP\b/.test(number))
+    score += 85;
+  if (/manga/.test(rarity) || /manga/.test(name)) score += 90;
+  if (/parallel/.test(rarity) || /parallel/.test(name)) score += 70;
+  if (/leader/.test(rarity) && (/alt|parallel|special/.test(rarity) || /alt/.test(name)))
+    score += 75;
+  else if (/leader/.test(rarity)) score += 35;
+  if (/super\s*rare|\bsr\b/.test(rarity)) score += 50;
+  if (/rare/.test(rarity) && score < 20) score += 15;
+
+  // Alt art / promo-ish naming
+  if (/alt\s*art|alternate\s*art/.test(name) || /alt\s*art/.test(rarity)) {
+    score += 40;
+  }
+
+  // High parallel / collector suffixes
+  if (/[Pp]\d+$/.test(card.number || "") || /_p\d+/i.test(card.number || "")) {
+    score += 25;
+  }
+
+  const printed = card.set?.printedTotal ?? 0;
+  const parsed = parseSetNumber(card.number || "");
+  if (printed > 0 && parsed.num > printed) score += 40;
+
+  return score;
 }
 
 /** Natural-ish set number sort: "1", "2", "10", "TG01", etc. */
@@ -80,6 +245,12 @@ export function formatPrice(value: number | null): string {
     style: "currency",
     currency: "USD",
   }).format(value);
+}
+
+/** UI copy when marketPrice is null — never invent a dollar amount. */
+export function formatPriceLabel(value: number | null): string {
+  if (value === null) return "No price yet";
+  return formatPrice(value);
 }
 
 export function formatVariant(variant: string | null): string {
