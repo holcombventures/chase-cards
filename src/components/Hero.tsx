@@ -40,22 +40,35 @@ type Props = {
   children?: ReactNode;
 };
 
+const CHASE_HEADING_ID = "chase-heading";
+/** Netlify DP chrome + home indicator — keep heading above this band */
+const TRY_FREE_BOTTOM_PAD_PX = 72;
+
 function scrollToTryFreeFrame() {
   if (typeof document === "undefined") return;
-  // Prefer set chrome so mobile keeps Choose set + toggles + stats in view,
-  // with "Top 3 chase" near the bottom — not slammed to the top.
+  // Pin "Top 3 chase" near the bottom of the viewport so Choose set /
+  // toggles / stats stay readable above — not chrome-only, not heading@top.
+  const heading = document.getElementById(CHASE_HEADING_ID);
+  if (heading) {
+    const rect = heading.getBoundingClientRect();
+    const absoluteTop = rect.top + window.scrollY;
+    const targetY =
+      absoluteTop - (window.innerHeight - rect.height - TRY_FREE_BOTTOM_PAD_PX);
+    window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+    if (typeof heading.focus === "function") {
+      try {
+        heading.focus({ preventScroll: true });
+      } catch {
+        heading.focus();
+      }
+    }
+    return;
+  }
   const el =
     document.getElementById(SET_CHROME_SECTION_ID) ||
     document.getElementById(CHASE_SECTION_ID);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (typeof el.focus === "function") {
-    try {
-      el.focus({ preventScroll: true });
-    } catch {
-      el.focus();
-    }
-  }
 }
 
 function CollageSkeleton() {
@@ -323,4 +336,4 @@ export function Hero({
   );
 }
 
-export { CHASE_SECTION_ID, SET_CHROME_SECTION_ID };
+export { CHASE_SECTION_ID, SET_CHROME_SECTION_ID, CHASE_HEADING_ID };

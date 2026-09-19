@@ -33,7 +33,7 @@ import { StatusPanel } from "./StatusPanel";
 import { PremiumGate, type GateAction } from "./PremiumGate";
 import { SetStatsPanel } from "./SetStatsPanel";
 import { CategorySwitcher } from "./CategorySwitcher";
-import { Hero, CHASE_SECTION_ID, SET_CHROME_SECTION_ID } from "./Hero";
+import { Hero, CHASE_SECTION_ID, SET_CHROME_SECTION_ID, CHASE_HEADING_ID } from "./Hero";
 import { EntitlementShop } from "./EntitlementShop";
 import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
@@ -577,7 +577,7 @@ export function ChaseApp() {
         <section
           id={SET_CHROME_SECTION_ID}
           tabIndex={-1}
-          className="scroll-mt-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] rounded-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 p-4 shadow-lg shadow-black/25 outline-none sm:scroll-mt-28 sm:p-5"
+          className="scroll-mt-[max(3.5rem,calc(env(safe-area-inset-top)+2.5rem))] rounded-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900/90 to-slate-950/95 p-3 shadow-lg shadow-black/25 outline-none sm:scroll-mt-28 sm:p-5"
           aria-label="Set picker"
         >
           <SetSelector
@@ -592,7 +592,7 @@ export function ChaseApp() {
       ) : null}
 
       {catalogLive ? (
-        <section className="sticky top-0 z-20 space-y-3 rounded-2xl border border-white/10 bg-slate-950/95 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:p-4 sm:pt-[calc(1rem+env(safe-area-inset-top))]">
+        <section className="sticky top-0 z-20 space-y-2 rounded-2xl border border-white/10 bg-slate-950/95 p-2.5 pt-[calc(0.5rem+env(safe-area-inset-top))] shadow-lg shadow-black/20 backdrop-blur-md sm:space-y-3 sm:p-4 sm:pt-[calc(1rem+env(safe-area-inset-top))]">
           {setsLoading ? (
             <StatusPanel
               variant="loading"
@@ -739,7 +739,11 @@ export function ChaseApp() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="space-y-1">
-                      <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-white sm:text-xl">
+                      <h2
+                        id={mode === "chase" ? CHASE_HEADING_ID : undefined}
+                        tabIndex={mode === "chase" ? -1 : undefined}
+                        className="flex flex-wrap items-center gap-2 scroll-mt-4 text-lg font-semibold text-white outline-none sm:text-xl"
+                      >
                         <span>
                           {mode === "chase"
                             ? fullAccessHere
