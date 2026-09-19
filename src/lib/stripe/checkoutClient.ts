@@ -1,5 +1,6 @@
 "use client";
 
+import type { CategoryId } from "@/lib/catalog/types";
 import type { CheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { startCheckout } from "@/lib/stripe/startCheckout";
 
@@ -8,6 +9,8 @@ export type PurchaseHandler = {
   onDemoFallback: () => void;
   /** Optional status for UI (loading / error toast) */
   onStatus?: (message: string | null) => void;
+  /** Live category for Premium Checkout metadata */
+  premiumCategory?: CategoryId;
 };
 
 /**
@@ -16,10 +19,13 @@ export type PurchaseHandler = {
  */
 export async function purchaseEntitlement(
   entitlement: CheckoutEntitlementKey,
-  { onDemoFallback, onStatus }: PurchaseHandler,
+  { onDemoFallback, onStatus, premiumCategory }: PurchaseHandler,
 ): Promise<void> {
   onStatus?.("Starting checkout…");
-  const result = await startCheckout(entitlement);
+  const result = await startCheckout(entitlement, {
+    premiumCategory:
+      entitlement === "premium" ? premiumCategory : undefined,
+  });
   if (result.ok) {
     onStatus?.(null);
     window.location.assign(result.url);

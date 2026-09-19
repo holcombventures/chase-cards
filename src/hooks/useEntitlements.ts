@@ -18,6 +18,7 @@ import {
   unlockPremiumState,
   unlockSportState,
   writeEntitlements,
+  type ApplyCheckoutOptions,
   type CheckoutEntitlementKey,
   type EntitlementsState,
   type SportAddonId,
@@ -25,7 +26,7 @@ import {
 
 /**
  * Entitlements hook — localStorage + optional Stripe confirm grants.
- * Migrates legacy `chase-cards-premium` on first read.
+ * Migrates legacy `chase-cards-premium` on first read (→ premium + pokemon).
  */
 export function useEntitlements() {
   const [entitlements, setEntitlements] =
@@ -58,9 +59,12 @@ export function useEntitlements() {
     setEntitlements(readEntitlements());
   }, []);
 
-  const unlockPremium = useCallback(() => {
-    persist(unlockPremiumState(readEntitlements()));
-  }, [persist]);
+  const unlockPremium = useCallback(
+    (categoryId: CategoryId) => {
+      persist(unlockPremiumState(readEntitlements(), categoryId));
+    },
+    [persist],
+  );
 
   const unlockAddon = useCallback(
     (categoryId: CategoryId) => {
@@ -81,9 +85,13 @@ export function useEntitlements() {
   }, [persist]);
 
   const applyPaidEntitlements = useCallback(
-    (keys: CheckoutEntitlementKey[]) => {
+    (keys: CheckoutEntitlementKey[], options?: ApplyCheckoutOptions) => {
       if (!keys.length) return readEntitlements();
-      const next = applyCheckoutEntitlements(readEntitlements(), keys);
+      const next = applyCheckoutEntitlements(
+        readEntitlements(),
+        keys,
+        options,
+      );
       persist(next);
       return readEntitlements();
     },

@@ -16,12 +16,12 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
   2. **Month-over-month (MoM)** — percent change vs ~30-day Cardmarket averages via TCGdex (`avg`/`trend` vs `avg30`), or **N/A** with reason when data/age is insufficient
   - **Every metric (including N/A) shows a visible source line** under the value
 - **Entitlements (demo localStorage)**:
-  - **Free**: live catalogs (Pokémon + One Piece), top **3** chase (soft-lock remainder + unlock CTAs)
-  - **Premium $4.99**: full chase (top 20%) + entire set for Pokémon; for One Piece also needs the One Piece add-on
-  - **Category add-on $2.99** each (`one-piece`, `mtg`, `sports`): One Piece add-on unlocks full OP depth with Premium; MTG/Sports still reserve coming-soon entitlement
-  - **All Access $29.99**: Premium + all category/sport add-ons; full depth on all live catalogs (Stripe or demo)
+  - **Free**: top **3** chase on **every** live catalog (Pokémon + One Piece)
+  - **Premium $4.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
+  - **Category add-on $2.99** (`pokemon`, `one-piece`, `mtg`, `sports`): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece); MTG/Sports still reserve coming-soon
+  - **All Access $29.99**: unlocks all categories (Stripe or demo)
   - Coming-soon categories: entitled → “catalog coming soon”; otherwise paywall CTAs.
-  - Legacy `chase-cards-premium` key migrates into the new entitlements store
+  - Legacy `chase-cards-premium` / premium-without-category migrates to Premium + `premiumCategory: "pokemon"`
   - Shop panel + **Restore free / clear entitlements** for testing
 - Each card tile shows: name, number/set info, labeled latest market price, and card photo (locked teasers blur name/price)
 - Loading, empty, and error states (including API rate limits)
@@ -152,8 +152,8 @@ src/
 ## How to demo Phase 2B (Deploy Preview / chasecards.online after merge)
 
 1. Open the site — category chips at the top of the controls.
-2. **Pokémon (Live)** — top 3 chase free; Unlock Premium / shop for full chase + entire set.
-3. **One Piece English (Live)** — free top 3 chase; full depth needs Premium + One Piece add-on, or All Access (Stripe or demo).
+2. **Pokémon (Live)** — top 3 chase free; Premium (choose Pokémon) or Pokémon add-on / All Access for full depth.
+3. **One Piece English (Live)** — free top 3 chase; Premium (choose One Piece) or One Piece add-on / All Access for full depth.
 4. **MTG / Sports** — coming soon; entitled → “catalog coming soon”; otherwise paywall CTAs.
 5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
 

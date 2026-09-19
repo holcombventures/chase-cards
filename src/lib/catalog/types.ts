@@ -12,7 +12,7 @@ export type CategoryConfig = {
   label: string;
   /** Short label for compact switcher chips */
   shortLabel: string;
-  /** Add-on price display (Pokémon has no add-on) */
+  /** Add-on price display (Pokémon $2.99 when shown as add-on) */
   priceLabel: string | null;
   status: CategoryStatus;
 };
@@ -22,7 +22,8 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     id: "pokemon",
     label: "Pokémon",
     shortLabel: "Pokémon",
-    priceLabel: null,
+    /** Shown when Pokémon is offered as a $2.99 add-on (Premium chose another live cat). */
+    priceLabel: "$2.99",
     status: "live",
   },
   {

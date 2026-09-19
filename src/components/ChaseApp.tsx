@@ -11,6 +11,7 @@ import type {
 import { selectChaseCards, sortBySetNumber } from "@/lib/prices";
 import {
   DEFAULT_CATEGORY_ID,
+  LIVE_CATALOG_IDS,
   getCategory,
   isLiveCategory,
   type CategoryId,
@@ -107,10 +108,16 @@ export function ChaseApp() {
       if (cancelled) return;
       if (result.paid && result.entitlements.length) {
         const keys = result.entitlements.filter(isCheckoutEntitlementKey);
-        applyPaidEntitlements(keys);
+        applyPaidEntitlements(keys, {
+          premiumCategory: result.premiumCategory ?? undefined,
+        });
+        const catNote =
+          result.premiumCategory && keys.includes("premium")
+            ? ` (${result.premiumCategory})`
+            : "";
         setCheckoutBanner(
           keys.length
-            ? `Payment confirmed — unlocked ${keys.join(", ").replace(/_/g, " ")}.`
+            ? `Payment confirmed — unlocked ${keys.join(", ").replace(/_/g, " ")}${catNote}.`
             : "Payment confirmed.",
         );
       } else if (result.paid) {
@@ -131,19 +138,26 @@ export function ChaseApp() {
     };
   }, [entitlementsReady, applyPaidEntitlements]);
 
-  const buyPremium = useCallback(async () => {
-    setCheckoutBusy(true);
-    try {
-      await purchaseEntitlement("premium", {
-        onDemoFallback: unlockPremium,
-        onStatus: (msg) => {
-          if (msg && msg !== "Starting checkout…") setCheckoutBanner(msg);
-        },
-      });
-    } finally {
-      setCheckoutBusy(false);
-    }
-  }, [unlockPremium]);
+  const [pickingPremiumHeader, setPickingPremiumHeader] = useState(false);
+
+  const buyPremiumFor = useCallback(
+    async (categoryIdForPremium: CategoryId) => {
+      setCheckoutBusy(true);
+      try {
+        await purchaseEntitlement("premium", {
+          premiumCategory: categoryIdForPremium,
+          onDemoFallback: () => unlockPremium(categoryIdForPremium),
+          onStatus: (msg) => {
+            if (msg && msg !== "Starting checkout…") setCheckoutBanner(msg);
+          },
+        });
+        setPickingPremiumHeader(false);
+      } finally {
+        setCheckoutBusy(false);
+      }
+    },
+    [unlockPremium],
+  );
 
   const [categoryId, setCategoryId] = useState<CategoryId>(DEFAULT_CATEGORY_ID);
   const category = getCategory(categoryId);
@@ -155,7 +169,14 @@ export function ChaseApp() {
   const ownsThis = ownsCategory(categoryId);
 
   const ownedIds = useMemo(() => {
-    const ids: CategoryId[] = ["pokemon"];
+    // Freemium: live catalogs are always browsable (top-3). Badge "owned"
+    // also includes premiumCategory + add-ons + all-access.
+    const ids: CategoryId[] = [...LIVE_CATALOG_IDS];
+    if (entitlements.premiumCategory) {
+      if (!ids.includes(entitlements.premiumCategory)) {
+        ids.push(entitlements.premiumCategory);
+      }
+    }
     for (const id of entitlements.categories) {
       if (!ids.includes(id)) ids.push(id);
     }
@@ -383,32 +404,26 @@ export function ChaseApp() {
     (priceSource === "optcg" || priceSource === "optcgapi");
 
   const unlockActions: GateAction[] = useMemo(() => {
-    if (isPokemon) {
-      return [
-        {
-          label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
-          onClick: unlockPremium,
-          accent: "amber",
-          checkoutKey: "premium",
-        },
-      ];
-    }
-    // One Piece (and future live add-on categories): Premium + add-on, or All Access
     const actions: GateAction[] = [];
     if (!isPremium) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
-        onClick: unlockPremium,
+        onClick: () => unlockPremium(categoryId),
         accent: "amber",
         checkoutKey: "premium",
+        needsPremiumPicker: true,
       });
-    }
-    if (!ownsThis) {
+    } else if (!fullAccessHere) {
+      // Premium owned but this live category still top-3 → offer add-on
       actions.push({
         label: `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`,
         onClick: () => unlockAddon(categoryId),
         accent: "sky",
-        checkoutKey: categoryId as "one-piece" | "mtg" | "sports",
+        checkoutKey: categoryId as
+          | "pokemon"
+          | "one-piece"
+          | "mtg"
+          | "sports",
       });
     }
     if (!entitlements.allAccess) {
@@ -421,17 +436,17 @@ export function ChaseApp() {
     }
     if (actions.length === 0) {
       actions.push({
-        label: `Unlock Premium · ${PREMIUM_PRICE_LABEL}`,
-        onClick: unlockPremium,
+        label: `Premium · ${PREMIUM_PRICE_LABEL}`,
+        onClick: () => unlockPremium(categoryId),
         accent: "amber",
         checkoutKey: "premium",
+        needsPremiumPicker: true,
       });
     }
     return actions;
   }, [
-    isPokemon,
     isPremium,
-    ownsThis,
+    fullAccessHere,
     category.shortLabel,
     category.priceLabel,
     categoryId,
@@ -442,16 +457,16 @@ export function ChaseApp() {
   ]);
 
   const unlockMessage = (() => {
-    if (isPokemon) {
-      return `Unlock Premium for ${PREMIUM_PRICE_LABEL} to see the remaining chase cards (full top 20%) and browse the entire set.`;
+    if (!isPremium) {
+      return `Free shows top ${FREE_CHASE_LIMIT} chase on every live catalog. Unlock Premium (${PREMIUM_PRICE_LABEL}) and choose one category for full chase + entire set. Other live categories stay top 3 until an add-on (${ADDON_PRICE_LABEL}) or All Access (${ALL_ACCESS_PRICE_LABEL}).`;
     }
-    if (isPremium && !ownsThis) {
-      return `Premium is active — unlock the ${category.shortLabel} add-on (${category.priceLabel}) or All Access to open full chase + entire set for ${category.label}.`;
+    if (isPremium && !fullAccessHere) {
+      const picked = entitlements.premiumCategory
+        ? getCategory(entitlements.premiumCategory).shortLabel
+        : "another category";
+      return `Premium unlocked ${picked}. Unlock the ${category.shortLabel} add-on (${category.priceLabel ?? ADDON_PRICE_LABEL}) or All Access for full chase + entire set here.`;
     }
-    if (!isPremium && ownsThis) {
-      return `${category.shortLabel} add-on is owned — unlock Premium (${PREMIUM_PRICE_LABEL}) or All Access for full chase + entire set.`;
-    }
-    return `Free shows top ${FREE_CHASE_LIMIT} chase. Full ${category.shortLabel} chase + entire set needs Premium (${PREMIUM_PRICE_LABEL}) + ${category.shortLabel} add-on (${category.priceLabel}), or All Access (${ALL_ACCESS_PRICE_LABEL}).`;
+    return `Full ${category.shortLabel} access needs Premium (choose this category), the ${category.shortLabel} add-on, or All Access.`;
   })();
 
   const chaseSubtitle = (() => {
@@ -510,10 +525,31 @@ export function ChaseApp() {
                     Restore free
                   </button>
                 </>
+              ) : pickingPremiumHeader ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {LIVE_CATALOG_IDS.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      disabled={checkoutBusy}
+                      onClick={() => void buyPremiumFor(id)}
+                      className="min-h-11 rounded-full bg-amber-400 px-3 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
+                    >
+                      {getCategory(id).shortLabel}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPickingPremiumHeader(false)}
+                    className="text-[11px] text-slate-400 underline-offset-2 hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => void buyPremium()}
+                  onClick={() => setPickingPremiumHeader(true)}
                   disabled={checkoutBusy}
                   className="min-h-11 rounded-full bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60 sm:min-h-0 sm:px-3 sm:py-1 sm:text-[11px]"
                 >
@@ -533,10 +569,11 @@ export function ChaseApp() {
             One Piece English
           </strong>{" "}
           are live — free shows the{" "}
-          <strong className="font-semibold text-amber-200">top 3 chase</strong>.
-          Premium ({PREMIUM_PRICE_LABEL}) unlocks full Pokémon chase + entire
-          set. One Piece full depth needs Premium + the One Piece add-on (
-          {"$2.99"}) or All Access ({"$29.99"}). MTG and Sports remain
+          <strong className="font-semibold text-amber-200">top 3 chase</strong>{" "}
+          in every live category. Premium ({PREMIUM_PRICE_LABEL}): choose{" "}
+          <strong className="font-semibold text-amber-200">one</strong> category
+          for full chase + entire set; other live categories stay top 3 until an
+          add-on ({"$2.99"}) or All Access ({"$29.99"}). MTG and Sports remain
           coming-soon.
         </p>
       </header>
@@ -705,11 +742,8 @@ export function ChaseApp() {
                   <PremiumGate
                     variant="panel"
                     title={`${totalInSet} cards in this set`}
-                    message={
-                      isPokemon
-                        ? `Entire set view is a Premium feature (${PREMIUM_PRICE_LABEL}). Unlock to browse every card sorted by set number — plus the full chase list (top 20%).`
-                        : unlockMessage
-                    }
+                    message={unlockMessage}
+                    onUnlock={unlockPremium}
                     actions={unlockActions}
                   />
                 </>
@@ -787,6 +821,7 @@ export function ChaseApp() {
                         variant="inline"
                         title={`${lockedChaseCount} more chase · ${totalInSet} in set`}
                         message={unlockMessage}
+                        onUnlock={unlockPremium}
                         actions={unlockActions}
                       />
                     </div>
@@ -808,7 +843,7 @@ export function ChaseApp() {
           onRestoreFree={restoreFree}
           compact
           highlightAddon={
-            isOnePiece && !ownsThis ? "one-piece" : null
+            catalogLive && !fullAccessHere ? categoryId : null
           }
         />
       ) : null}
@@ -837,9 +872,9 @@ export function ChaseApp() {
         {entitlementsReady ? (
           <>
             {" "}
-            · Free: top {FREE_CHASE_LIMIT} chase on live catalogs · Premium{" "}
-            {PREMIUM_PRICE_LABEL} · Add-ons $2.99 · All Access $29.99 · Stripe
-            when configured.
+            · Free: top {FREE_CHASE_LIMIT} chase on every live catalog ·
+            Premium {PREMIUM_PRICE_LABEL} (choose one category) · Add-ons $2.99
+            · All Access $29.99 · Stripe when configured.
           </>
         ) : null}
       </footer>
@@ -862,18 +897,20 @@ function ComingSoonCategoryPanel({
   hasPremium: boolean;
   onUnlockAddon: () => void;
   onUnlockAllAccess: () => void;
-  onUnlockPremium: () => void;
+  onUnlockPremium: (categoryId: CategoryId) => void;
 }) {
   const cat = getCategory(categoryId);
   const [busy, setBusy] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
-  const buy = async (
-    key: "premium" | "all_access" | "one-piece" | "mtg" | "sports",
-    demo: () => void,
-  ) => {
-    setBusy(key);
+  const buyPremium = async (liveId: CategoryId) => {
+    setBusy(`premium:${liveId}`);
     try {
-      await purchaseEntitlement(key, { onDemoFallback: demo });
+      await purchaseEntitlement("premium", {
+        premiumCategory: liveId,
+        onDemoFallback: () => onUnlockPremium(liveId),
+      });
+      setPicking(false);
     } finally {
       setBusy(null);
     }
@@ -919,21 +956,44 @@ function ComingSoonCategoryPanel({
         ($29.99) via the shop to reserve entitlement for when the catalog goes
         live.
         {hasPremium
-          ? " Premium covers Pokémon depth; One Piece full depth needs its add-on or All Access."
-          : " Premium ($4.99) unlocks full Pokémon chase today."}
+          ? " Premium already unlocked one live category; add-ons cover the rest."
+          : " Premium ($4.99) lets you choose one live category for full depth today."}
       </p>
       {!hasPremium ? (
-        <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:justify-center">
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void buy("premium", onUnlockPremium)}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60"
-          >
-            {busy === "premium"
-              ? "Working…"
-              : `Premium · ${PREMIUM_PRICE_LABEL}`}
-          </button>
+        <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
+          {picking ? (
+            <>
+              {LIVE_CATALOG_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void buyPremium(id)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60"
+                >
+                  {busy === `premium:${id}`
+                    ? "Working…"
+                    : `${getCategory(id).shortLabel} · ${PREMIUM_PRICE_LABEL}`}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPicking(false)}
+                className="text-[11px] text-slate-400 underline-offset-2 hover:underline"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => setPicking(true)}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 disabled:opacity-60"
+            >
+              Premium · {PREMIUM_PRICE_LABEL}
+            </button>
+          )}
         </div>
       ) : null}
     </div>

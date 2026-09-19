@@ -2,7 +2,8 @@
 
 /**
  * Compatibility wrapper — Premium is now part of the entitlements model.
- * Prefer `useEntitlements` for new UI. Legacy `chase-cards-premium` still migrates.
+ * Prefer `useEntitlements` for new UI. Legacy `chase-cards-premium` still migrates
+ * to premium + premiumCategory "pokemon".
  */
 
 export {
@@ -11,9 +12,14 @@ export {
   LEGACY_PREMIUM_STORAGE_KEY as PREMIUM_STORAGE_KEY,
 } from "@/lib/entitlements";
 
+import { useCallback } from "react";
 import { useEntitlements } from "@/hooks/useEntitlements";
 
 export function usePremium() {
   const { isPremium, ready, unlockPremium, restoreFree } = useEntitlements();
-  return { isPremium, ready, unlockPremium, restoreFree };
+  // Legacy callers: grandfather Pokémon as the Premium category
+  const unlock = useCallback(() => {
+    unlockPremium("pokemon");
+  }, [unlockPremium]);
+  return { isPremium, ready, unlockPremium: unlock, restoreFree };
 }

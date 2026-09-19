@@ -9,13 +9,15 @@ Demo unlock remains when `STRIPE_SECRET_KEY` or the matching `STRIPE_PRICE_*` is
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/stripe/checkout` | Body `{ entitlement }` → create Checkout Session → `{ url, sessionId }` |
+| `POST` | `/api/stripe/checkout` | Body `{ entitlement, premiumCategory? }` → create Checkout Session → `{ url, sessionId }` |
 | `GET` | `/api/stripe/confirm?session_id=` | Retrieve session; if paid, return `{ entitlements: [...] }` |
 | `POST` | `/api/stripe/webhook` | Optional `checkout.session.completed` (signature via `STRIPE_WEBHOOK_SECRET`); log/ack |
 
 ### Entitlement keys
 
-`premium` · `all_access` · `one-piece` · `mtg` · `sports` · `sports-baseball` · `sports-basketball` · `sports-football` · `sports-hockey` · `sports-soccer`
+`premium` · `all_access` · `pokemon` · `one-piece` · `mtg` · `sports` · `sports-baseball` · `sports-basketball` · `sports-football` · `sports-hockey` · `sports-soccer`
+
+For **`premium`**, also pass **`premiumCategory`**: `"pokemon"` | `"one-piece"` (live categories only). Stored on the Checkout Session as metadata `premium_category` and applied on confirm.
 
 Success URL: `/?checkout=success&session_id={CHECKOUT_SESSION_ID}`  
 Cancel URL: `/?checkout=cancel`
@@ -30,6 +32,7 @@ Set these in **Netlify → Site settings → Environment variables** (and option
 | `STRIPE_WEBHOOK_SECRET` | Optional until webhook | Signing secret (`whsec_…`) for `/api/stripe/webhook` |
 | `STRIPE_PRICE_PREMIUM` | For Premium Checkout | Stripe Price ID (`price_…`) |
 | `STRIPE_PRICE_ALL_ACCESS` | For All Access | Stripe Price ID |
+| `STRIPE_PRICE_POKEMON` | For Pokémon add-on | Stripe Price ID (NEW — needed when Premium chose One Piece) |
 | `STRIPE_PRICE_ONE_PIECE` | For One Piece add-on | Stripe Price ID |
 | `STRIPE_PRICE_MTG` | For MTG add-on | Stripe Price ID |
 | `STRIPE_PRICE_SPORTS` | Optional alias | Single generic Sports product Price ID |
@@ -63,5 +66,8 @@ Without keys, buttons still **demo unlock** so Pokémon freemium keeps working o
 ## Notes
 
 - Generic **Sports** category stays `coming_soon` until Phase sports adapters. Purchasing `sports-*` sets `entitlements.sports[]` for future use; any sport (or `sports` add-on) also marks the Sports chip as entitled.
-- Pokémon entitlements are unchanged: free top-3 chase; Premium / All Access for full depth.
+- **Premium choose-one model**: one `STRIPE_PRICE_PREMIUM` Price ID; category choice is session **metadata** (`premium_category`), not a separate Price. No conflict with existing Premium Price ID.
+- **Pokémon add-on gap**: there is no `STRIPE_PRICE_POKEMON` until you create one in Stripe Dashboard and set it in Netlify. Until then, Pokémon add-on checkout returns `demoFallback` (same as other missing add-on prices).
+- Free: top-3 chase on every live category. Premium: full depth on the chosen live category only. Add-on ($2.99): full depth on another live category. All Access: all categories.
+- Legacy buyers with `premium: true` and no `premiumCategory` migrate to `premiumCategory: "pokemon"`.
 - Webhook is best-effort logging until accounts exist; do not rely on it alone for grants.
