@@ -32,16 +32,17 @@ type Props = {
   onCancelPremiumPick: () => void;
   onBuyPremiumFor: (categoryId: CategoryId) => void;
   onRestoreFree: () => void;
+  /** Prefer chase-mode set collection (not Statistics) */
+  onTryFree?: () => void;
   /** Category tabs rendered under the collage */
   children?: ReactNode;
 };
 
-function scrollToChase() {
+function scrollToChaseCollection() {
   if (typeof document === "undefined") return;
   const el = document.getElementById(CHASE_SECTION_ID);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
-  // Focus for a11y without forcing a visible ring on every scroll
   if (typeof el.focus === "function") {
     try {
       el.focus({ preventScroll: true });
@@ -143,8 +144,16 @@ export function Hero({
   onCancelPremiumPick,
   onBuyPremiumFor,
   onRestoreFree,
+  onTryFree,
   children,
 }: Props) {
+  const handleTryFree = () => {
+    onTryFree?.();
+    // Defer scroll so chase mode / DOM updates land before scrollIntoView
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToChaseCollection);
+    });
+  };
   const showCollage = !loading && top3.length > 0;
   const offsets: Array<"left" | "center" | "right"> = ["left", "center", "right"];
 
@@ -205,7 +214,7 @@ export function Hero({
                 </button>
                 <button
                   type="button"
-                  onClick={scrollToChase}
+                  onClick={handleTryFree}
                   className="min-h-11 rounded-full border border-white/15 bg-transparent px-3.5 py-2.5 text-xs font-semibold text-slate-200 hover:border-amber-400/40 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-[11px]"
                 >
                   Free top {FREE_CHASE_LIMIT}
@@ -228,7 +237,7 @@ export function Hero({
           <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
-              onClick={scrollToChase}
+              onClick={handleTryFree}
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-950/30 hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               Try free · Top {FREE_CHASE_LIMIT}

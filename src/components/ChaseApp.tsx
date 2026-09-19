@@ -534,6 +534,9 @@ export function ChaseApp() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
       <Hero
         top3={freeChaseVisible}
+        onTryFree={() => {
+          setMode("chase");
+        }}
         loading={catalogLive && (setsLoading || uiCardsLoading)}
         estimated={chaseMode === "estimated" && freeChaseVisible.length > 0}
         entitlementsReady={entitlementsReady}
@@ -655,11 +658,7 @@ export function ChaseApp() {
       ) : null}
 
       {catalogLive && !setsLoading && !setsError ? (
-        <section
-          id={CHASE_SECTION_ID}
-          tabIndex={-1}
-          className="space-y-4 scroll-mt-28 outline-none"
-        >
+        <section className="space-y-4">
           {!setId ? (
             <StatusPanel
               variant="empty"
@@ -698,6 +697,12 @@ export function ChaseApp() {
                 <SetStatsPanel stats={setStats} setName={selectedSet?.name} />
               ) : null}
 
+              {/* Try free · Top 3 scrolls here — set collection only, not Statistics */}
+              <div
+                id={CHASE_SECTION_ID}
+                tabIndex={-1}
+                className="scroll-mt-28 space-y-4 outline-none"
+              >
               {mode === "chase" && chaseCards.length === 0 ? (
                 <StatusPanel
                   variant="empty"
@@ -879,6 +884,7 @@ export function ChaseApp() {
                   ) : null}
                 </>
               )}
+              </div>
             </>
           )}
         </section>
