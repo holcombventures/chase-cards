@@ -1,6 +1,6 @@
 /**
  * Multi-category catalog config.
- * Pokémon + One Piece English are live; MTG / Sports remain coming soon.
+ * Pokémon is live; One Piece / MTG / Sports are Coming Soon (OP adapter kept behind flag).
  */
 
 export type CategoryId = "pokemon" | "one-piece" | "mtg" | "sports";
@@ -31,7 +31,8 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     label: "One Piece English",
     shortLabel: "One Piece",
     priceLabel: "$2.99",
-    status: "live",
+    // Coming Soon until Bobby ships OP live — adapter kept behind this flag
+    status: "coming_soon",
   },
   {
     id: "mtg",

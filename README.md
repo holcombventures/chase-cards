@@ -2,11 +2,11 @@
 
 A Next.js prototype for browsing TCG sets and highlighting **chase cards** — the most valuable cards by live market price.
 
-**Phase 2B:** **Pokémon** and **One Piece English** are live catalogs via adapters under `src/lib/catalog/`. MTG / Sports stay coming-soon. Entitlements via localStorage; **Stripe Checkout** when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
+**Phase 2B:** **Pokémon** is live. **One Piece English**, MTG, and Sports are Coming Soon (OP adapter kept behind the category flag). Entitlements via localStorage; **Stripe Checkout** when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
 
 ## Features
 
-- **Category switcher** — Pokémon + One Piece English (live), MTG / Sports (coming soon)
+- **Category switcher** — Pokémon (live); One Piece / MTG / Sports (Coming Soon)
 - Pick any Pokémon TCG set from the official API set list
 - Toggle between:
   1. **Chase cards** — top **20%** of cards in the set by market value (among cards with a usable market price; count is **rounded up**, minimum **1** if at least one priced card exists)
@@ -16,7 +16,7 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
   2. **Month-over-month (MoM)** — percent change vs ~30-day Cardmarket averages via TCGdex (`avg`/`trend` vs `avg30`), or **N/A** with reason when data/age is insufficient
   - **Every metric (including N/A) shows a visible source line** under the value
 - **Entitlements (demo localStorage)**:
-  - **Free**: top **3** chase on **every** live catalog (Pokémon + One Piece)
+  - **Free**: top **3** chase on every **live** catalog (Pokémon today)
   - **Premium $4.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
   - **Category add-on $2.99** (`pokemon`, `one-piece`, `mtg`, `sports`): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece); MTG/Sports still reserve coming-soon
   - **All Access $29.99**: unlocks all categories (Stripe or demo)
@@ -153,7 +153,7 @@ src/
 
 1. Open the site — category chips at the top of the controls.
 2. **Pokémon (Live)** — top 3 chase free; Premium (choose Pokémon) or Pokémon add-on / All Access for full depth.
-3. **One Piece English (Live)** — free top 3 chase; Premium (choose One Piece) or One Piece add-on / All Access for full depth.
+3. **One Piece English (Coming Soon)** — adapter present behind flag; not selectable as live until shipped.
 4. **MTG / Sports** — coming soon; entitled → “catalog coming soon”; otherwise paywall CTAs.
 5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
 
