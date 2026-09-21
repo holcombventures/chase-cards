@@ -11,6 +11,8 @@ type Props = {
   locked?: boolean;
   /** Chase-row foil/glow on unlocked ranked cards (#1–3 free, or all Premium chase) */
   foil?: boolean;
+  /** Market price is still loading; art can render ahead of it */
+  pricePending?: boolean;
 };
 
 function LockIcon({ className }: { className?: string }) {
@@ -54,7 +56,13 @@ function formatSetNumberLabel(card: CardWithPrice): string {
   return denom === null ? num : `${num}/${denom}`;
 }
 
-export function CardTile({ card, rank, locked = false, foil = false }: Props) {
+export function CardTile({
+  card,
+  rank,
+  locked = false,
+  foil = false,
+  pricePending = false,
+}: Props) {
   const setLabel = formatSetNumberLabel(card);
   const hasPrice = card.marketPrice !== null;
   const showFoil = foil && !locked;
@@ -121,6 +129,8 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
               ? "scale-105 p-1.5 blur-md brightness-50 saturate-50"
               : "p-1 group-hover:scale-[1.02] sm:p-1.5",
           ].join(" ")}
+          loading={typeof rank === "number" ? "eager" : "lazy"}
+          decoding="async"
           unoptimized
         />
         {locked ? (
@@ -158,6 +168,13 @@ export function CardTile({ card, rank, locked = false, foil = false }: Props) {
                 <LockIcon className="h-3.5 w-3.5 shrink-0 text-amber-200/70" />
                 Locked
               </p>
+            </div>
+          ) : pricePending ? (
+            <div className="rounded-lg border border-white/10 bg-slate-950/40 px-2.5 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Price
+              </p>
+              <p className="text-sm font-medium text-slate-400">Updating…</p>
             </div>
           ) : hasPrice ? (
             <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-2.5 py-2 shadow-inner shadow-amber-950/20">
