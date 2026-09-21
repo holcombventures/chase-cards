@@ -1,6 +1,7 @@
 /**
  * Multi-category catalog config.
- * Pokémon is live; One Piece / MTG / Sports are Coming Soon (OP adapter kept behind flag).
+ * Pokémon and One Piece English are live (OP uses public optcgapi.com without a key).
+ * MTG / Sports stay Coming Soon — no adapter yet.
  */
 
 export type CategoryId = "pokemon" | "one-piece" | "mtg" | "sports";
@@ -31,8 +32,8 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     label: "One Piece English",
     shortLabel: "One Piece",
     priceLabel: "$2.99",
-    // Coming Soon until Bobby ships OP live — adapter kept behind this flag
-    status: "coming_soon",
+    // Public optcgapi.com fallback serves sets, prices, and art without OPTCG_API_KEY.
+    status: "live",
   },
   {
     id: "mtg",

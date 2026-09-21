@@ -9,13 +9,22 @@ import * as onePiece from "./one-piece";
 
 export type CatalogAdapterId = "pokemon" | "one-piece";
 
+/** Adapter exists but category status is still coming_soon. Not an upstream failure. */
+export class CatalogNotLiveError extends Error {
+  readonly status = 404;
+  constructor(id: string) {
+    super(`Catalog for ${id} is not live yet.`);
+    this.name = "CatalogNotLiveError";
+  }
+}
+
 export function hasCatalogAdapter(id: CategoryId): id is CatalogAdapterId {
   return id === "pokemon" || id === "one-piece";
 }
 
 export function assertLiveCatalog(id: CategoryId): CatalogAdapterId {
   if (!isLiveCategory(id) || !hasCatalogAdapter(id)) {
-    throw new Error(`No live catalog adapter for category: ${id}`);
+    throw new CatalogNotLiveError(id);
   }
   return id;
 }

@@ -52,10 +52,19 @@ async function fetchJson<T>(
   let lastBody = "";
 
   for (let attempt = 1; attempt <= retries; attempt++) {
-    const res = await fetch(url, {
-      ...init,
-      cache: "no-store",
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        cache: "no-store",
+      });
+    } catch {
+      if (attempt < retries) {
+        await sleep(400 * attempt);
+        continue;
+      }
+      throw new OnePieceApiError("One Piece card API error (network).", 502);
+    }
     lastStatus = res.status;
     lastBody = await res.text();
 
@@ -202,6 +211,8 @@ function expectedCardPrefixes(setId: string): string[] | null {
 }
 
 function cardMatchesSet(cardId: string, setId: string): boolean {
+  // Premium Boosters reprint other products. Card ids stay OP/EB/ST/P, not PRBxx-.
+  if (/^PRB-?\d+$/i.test(setId.trim())) return true;
   const prefixes = expectedCardPrefixes(setId);
   if (!prefixes || prefixes.length === 0) return true;
   // Strip variant suffix so OP01-120_p2 still matches OP01
