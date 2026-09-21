@@ -153,7 +153,7 @@ export function selectChaseCards(
     const an = parseSetNumber(a.number).num;
     const bn = parseSetNumber(b.number).num;
     if (an !== bn) return bn - an;
-    return a.name.localeCompare(b.name);
+    return (a.name || "").localeCompare(b.name || "");
   });
 
   const count = Math.max(1, Math.ceil(cards.length * 0.2));
@@ -283,11 +283,14 @@ export function sortBySetNumber(cards: CardWithPrice[]): CardWithPrice[] {
       return an.prefix.localeCompare(bn.prefix);
     }
     if (an.num !== bn.num) return an.num - bn.num;
-    return a.number.localeCompare(b.number, undefined, { numeric: true });
+    return (a.number || "").localeCompare(b.number || "", undefined, {
+      numeric: true,
+    });
   });
 }
 
-function parseSetNumber(n: string): { prefix: string; num: number } {
+function parseSetNumber(n: string | null | undefined): { prefix: string; num: number } {
+  if (!n) return { prefix: "", num: Number.MAX_SAFE_INTEGER };
   const match = n.match(/^([A-Za-z]*)(\d+)/);
   if (!match) return { prefix: n, num: Number.MAX_SAFE_INTEGER };
   return { prefix: match[1] || "", num: parseInt(match[2], 10) };

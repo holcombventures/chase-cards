@@ -53,6 +53,14 @@ export const PRICES_CDN_CACHE_CONTROL =
 /** Legacy full payload mixes art identity with prices — do not CDN-cache it. */
 export const FULL_CACHE_CONTROL = "private, no-store";
 
+/**
+ * Next.js on Netlify varies the CDN key only on `__nextDataReq` and `_rsc`.
+ * `part`, `category`, `releaseDate`, and `setName` change this payload, so they
+ * have to be listed or catalog and price responses overwrite each other.
+ */
+export const CARDS_NETLIFY_VARY =
+  "query=part|category|releaseDate|setName|__nextDataReq|_rsc,header=x-nextjs-data|x-next-debug-logging|next-router-prefetch|next-router-segment-prefetch|next-router-state-tree|next-url|rsc,cookie=__prerender_bypass|__next_preview_data";
+
 export const CATALOG_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
 export const PRICE_MEMORY_TTL_MS = 60 * 1000;
 
@@ -63,12 +71,14 @@ export function cacheHeaders(
     return {
       "Cache-Control": CATALOG_CACHE_CONTROL,
       "Netlify-CDN-Cache-Control": CATALOG_CDN_CACHE_CONTROL,
+      "Netlify-Vary": CARDS_NETLIFY_VARY,
     };
   }
   if (part === "prices") {
     return {
       "Cache-Control": PRICES_CACHE_CONTROL,
       "Netlify-CDN-Cache-Control": PRICES_CDN_CACHE_CONTROL,
+      "Netlify-Vary": CARDS_NETLIFY_VARY,
     };
   }
   return { "Cache-Control": FULL_CACHE_CONTROL };
@@ -165,6 +175,69 @@ export function toPricesBody(body: CardsApiBody): {
       part: "prices",
     },
   };
+}
+
+const PRICE_SOURCES = new Set<PriceSource>([
+  "pokemontcg",
+  "tcgdex",
+  "optcg",
+  "optcgapi",
+]);
+
+/** Card identity the grid can render. Price patches do not qualify. */
+export function isCatalogCard(value: unknown): value is CardWithPrice {
+  if (!value || typeof value !== "object") return false;
+  const card = value as Partial<CardWithPrice>;
+  return (
+    typeof card.id === "string" &&
+    card.id.length > 0 &&
+    typeof card.name === "string" &&
+    typeof card.number === "string" &&
+    Boolean(card.images) &&
+    typeof card.images?.small === "string" &&
+    typeof card.images?.large === "string"
+  );
+}
+
+/**
+ * Accept a catalog payload. A price-only list returns null so it is never
+ * rendered as cards (those rows have no collector number and crash the sort).
+ */
+export function normalizeCatalogCards(data: unknown): CardWithPrice[] | null {
+  if (!Array.isArray(data)) return null;
+  if (data.length === 0) return [];
+  const cards = data.filter(isCatalogCard);
+  if (cards.length === 0) return null;
+  return cards;
+}
+
+/** Accept either a price patch list or a full card list and keep price fields. */
+export function normalizePricePatches(data: unknown): CardPricePatch[] | null {
+  if (!Array.isArray(data)) return null;
+  const patches: CardPricePatch[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") return null;
+    const item = row as Partial<CardPricePatch>;
+    if (typeof item.id !== "string" || item.id.length === 0) return null;
+    const marketPrice =
+      typeof item.marketPrice === "number" && Number.isFinite(item.marketPrice)
+        ? item.marketPrice
+        : null;
+    const priceSource =
+      item.priceSource && PRICE_SOURCES.has(item.priceSource)
+        ? item.priceSource
+        : null;
+    patches.push({
+      id: item.id,
+      marketPrice,
+      priceVariant:
+        typeof item.priceVariant === "string" ? item.priceVariant : null,
+      priceUpdatedAt:
+        typeof item.priceUpdatedAt === "string" ? item.priceUpdatedAt : null,
+      priceSource,
+    });
+  }
+  return patches;
 }
 
 /** Authoritative price merge. Cards missing from the patch list lose their price. */
