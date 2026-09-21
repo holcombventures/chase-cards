@@ -31,6 +31,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="preconnect" href="https://images.pokemontcg.io" />
+        <link rel="preconnect" href="https://images.scrydex.com" />
+      </head>
       <body className="min-h-full flex flex-col bg-slate-900 text-slate-100">
         {children}
       </body>

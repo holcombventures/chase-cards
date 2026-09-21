@@ -1,5 +1,19 @@
 import { NextResponse } from "next/server";
 import { PokemonTcgApiError } from "@/lib/api";
+import {
+  cacheHeaders,
+  catalogIsFresh,
+  payloadCacheKey,
+  pricesAreFresh,
+  toCatalogBody,
+  toPricesBody,
+  type CardsApiBody,
+} from "@/lib/cardCacheModel";
+import {
+  loadSharedPayload,
+  readCachedPayload,
+  type PayloadLoadResult,
+} from "@/lib/setPayloadCache";
 import { enrichCard, normalizeCardsSetTotals } from "@/lib/prices";
 import {
   fetchTcgdexFallbackPrices,
@@ -21,6 +35,12 @@ import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
 
 type Params = { params: Promise<{ setId: string }> };
+
+/**
+ * Handler always runs (prices must not be frozen in the Next data cache).
+ * Catalog vs price freshness is controlled by the HTTP cache headers below.
+ */
+export const dynamic = "force-dynamic";
 
 function parseCategory(request: Request): CategoryId {
   const url = new URL(request.url);
@@ -277,7 +297,7 @@ async function handleOnePiece(
   });
 }
 
-export async function GET(request: Request, { params }: Params) {
+async function loadFullCardsResponse(request: Request, { params }: Params) {
   const { setId } = await params;
 
   if (!setId || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
@@ -324,4 +344,87 @@ export async function GET(request: Request, { params }: Params) {
       { status: 500 },
     );
   }
+}
+
+function isCardsBody(body: unknown): body is CardsApiBody {
+  return (
+    Boolean(body) &&
+    typeof body === "object" &&
+    Array.isArray((body as CardsApiBody).data)
+  );
+}
+
+async function readCardsBody(
+  request: Request,
+  ctx: Params,
+): Promise<PayloadLoadResult> {
+  const res = await loadFullCardsResponse(request, ctx);
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = { error: "Unexpected error loading cards." };
+  }
+  if (!res.ok || !isCardsBody(body)) {
+    return { ok: false, status: res.status || 500, body };
+  }
+  return { ok: true, body };
+}
+
+export async function GET(request: Request, ctx: Params) {
+  const url = new URL(request.url);
+  const partParam = url.searchParams.get("part");
+  const part =
+    partParam === "catalog" || partParam === "prices" ? partParam : "full";
+
+  let category: CategoryId;
+  try {
+    category = parseCategory(request);
+  } catch (res) {
+    if (res instanceof Response) return res;
+    throw res;
+  }
+
+  const { setId } = await ctx.params;
+  if (!setId || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
+    return loadFullCardsResponse(request, ctx);
+  }
+
+  const key = payloadCacheKey({
+    category,
+    setId,
+    setName: url.searchParams.get("setName"),
+    releaseDate: url.searchParams.get("releaseDate"),
+  });
+
+  const cached = readCachedPayload(key);
+  if (cached && part === "catalog" && catalogIsFresh(cached.storedAt)) {
+    return NextResponse.json(toCatalogBody(cached.body), {
+      headers: cacheHeaders("catalog"),
+    });
+  }
+  if (cached && part !== "catalog" && pricesAreFresh(cached.storedAt)) {
+    const payload = part === "prices" ? toPricesBody(cached.body) : cached.body;
+    return NextResponse.json(payload, { headers: cacheHeaders(part) });
+  }
+
+  const result = await loadSharedPayload(key, () => readCardsBody(request, ctx));
+  if (!result.ok) {
+    return NextResponse.json(
+      result.body ?? { error: "Unexpected error loading cards." },
+      { status: result.status, headers: cacheHeaders("full") },
+    );
+  }
+
+  if (part === "catalog") {
+    return NextResponse.json(toCatalogBody(result.body), {
+      headers: cacheHeaders("catalog"),
+    });
+  }
+  if (part === "prices") {
+    return NextResponse.json(toPricesBody(result.body), {
+      headers: cacheHeaders("prices"),
+    });
+  }
+  return NextResponse.json(result.body, { headers: cacheHeaders("full") });
 }

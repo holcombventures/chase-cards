@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CardWithPrice,
   CardsMetaPriceSource,
@@ -39,9 +39,33 @@ import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 import { fetchJsonWithRetry } from "@/lib/fetchJson";
+import { mergeCardPrices, type CardPricePatch } from "@/lib/cardCacheModel";
+import { readSetCardCache, writeSetCardCache } from "@/lib/setCardCache";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
+
+type PricePayloadMeta = {
+  pricedCount?: number;
+  priceSource?: CardsMetaPriceSource;
+  fallbackUsed?: boolean;
+  stats?: SetStats;
+};
+
+function cardsEndpoint(
+  id: string,
+  cat: string,
+  releaseDate?: string | null,
+  setName?: string | null,
+  part?: "catalog" | "prices",
+): string {
+  const qs = new URLSearchParams();
+  qs.set("category", cat);
+  if (part) qs.set("part", part);
+  if (releaseDate) qs.set("releaseDate", releaseDate);
+  if (setName) qs.set("setName", setName);
+  return `/api/sets/${encodeURIComponent(id)}/cards?${qs.toString()}`;
+}
 
 
 function pickDefaultSetId(sets: PokemonSet[]): string {
@@ -210,6 +234,27 @@ export function ChaseApp() {
   const [setStats, setSetStats] = useState<SetStats | null>(null);
   /** Set id that current cards/error correspond to — detects first-paint race */
   const [cardsSetId, setCardsSetId] = useState("");
+  const [pricesRefreshing, setPricesRefreshing] = useState(false);
+  const [priceRefreshError, setPriceRefreshError] = useState<string | null>(null);
+  const loadGen = useRef(0);
+
+  // Restore a set the visitor already opened before paint, so <img> tags
+  // reuse the browser's HTTP cache instead of waiting on a full payload.
+  if (catalogLive && setId && cardsSetId !== setId) {
+    const cached = readSetCardCache(categoryId, setId);
+    if (cached) {
+      setCards(cached.cards);
+      setPricedCount(cached.pricedCount);
+      setPriceSource(cached.priceSource);
+      setFallbackUsed(cached.fallbackUsed);
+      setSetStats(cached.stats);
+      setCardsError(null);
+      setCardsLoading(false);
+      setCardsSetId(setId);
+      setPricesRefreshing(true);
+      setPriceRefreshError(null);
+    }
+  }
 
   const reloadSets = useCallback(async () => {
     if (!catalogLive) {
@@ -281,6 +326,7 @@ export function ChaseApp() {
       setName?: string | null,
     ) => {
       if (!id || !isLiveCategory(cat)) {
+        loadGen.current += 1;
         setCards([]);
         setPricedCount(0);
         setPriceSource(null);
@@ -288,44 +334,161 @@ export function ChaseApp() {
         setSetStats(null);
         setCardsError(null);
         setCardsSetId("");
+        setCardsLoading(false);
+        setPricesRefreshing(false);
+        setPriceRefreshError(null);
         return;
       }
-      setCardsLoading(true);
-      setCardsError(null);
-      setSetStats(null);
-      try {
-        const qs = new URLSearchParams();
-        qs.set("category", cat);
-        if (releaseDate) qs.set("releaseDate", releaseDate);
-        if (setName) qs.set("setName", setName);
-        const q = qs.toString();
-        const { res, body } = await fetchJsonWithRetry<{
-          data?: CardWithPrice[];
-          meta?: {
-            pricedCount?: number;
-            priceSource?: CardsMetaPriceSource;
-            fallbackUsed?: boolean;
-            stats?: SetStats;
-          };
-          error?: string;
-        }>(`/api/sets/${encodeURIComponent(id)}/cards?${q}`);
-        if (!res.ok) throw new Error(body.error || "Failed to load cards.");
-        setCards((body.data as CardWithPrice[]) || []);
-        setPricedCount(body.meta?.pricedCount ?? 0);
-        setPriceSource((body.meta?.priceSource as CardsMetaPriceSource) ?? null);
-        setFallbackUsed(Boolean(body.meta?.fallbackUsed));
-        setSetStats((body.meta?.stats as SetStats) ?? null);
+
+      const gen = ++loadGen.current;
+      const stale = () => gen !== loadGen.current;
+      const cached = readSetCardCache(cat, id);
+
+      if (!cached) {
+        setCardsLoading(true);
+        setCardsError(null);
+        setPriceRefreshError(null);
+      } else {
+        setCardsLoading(false);
+        setCardsError(null);
+        setPriceRefreshError(null);
+        setPricesRefreshing(true);
+      }
+
+      const applySnapshot = (
+        nextCards: CardWithPrice[],
+        meta: PricePayloadMeta,
+        pricesAt: number,
+      ) => {
+        const nextPricedCount =
+          typeof meta.pricedCount === "number"
+            ? meta.pricedCount
+            : nextCards.filter((card) => card.marketPrice !== null).length;
+        const nextPriceSource = meta.priceSource ?? null;
+        const nextFallback = Boolean(meta.fallbackUsed);
+        const nextStats = meta.stats ?? null;
+        writeSetCardCache({
+          categoryId: cat,
+          setId: id,
+          cards: nextCards,
+          pricedCount: nextPricedCount,
+          priceSource: nextPriceSource,
+          fallbackUsed: nextFallback,
+          stats: nextStats,
+          cachedAt: Date.now(),
+          pricesAt,
+        });
+        if (stale()) return;
+        setCards(nextCards);
+        setPricedCount(nextPricedCount);
+        setPriceSource(nextPriceSource);
+        setFallbackUsed(nextFallback);
+        setSetStats(nextStats);
+        setCardsError(null);
         setCardsSetId(id);
+        setCardsLoading(false);
+        setPricesRefreshing(pricesAt === 0);
+        setPriceRefreshError(null);
+      };
+
+      try {
+        if (!cached) {
+          let pricesResult:
+            | {
+                res: Response;
+                body: {
+                  data?: CardPricePatch[];
+                  meta?: PricePayloadMeta;
+                  error?: string;
+                };
+              }
+            | undefined;
+          const pricesPromise = fetchJsonWithRetry<{
+            data?: CardPricePatch[];
+            meta?: PricePayloadMeta;
+            error?: string;
+          }>(cardsEndpoint(id, cat, releaseDate, setName, "prices"), {
+            cache: "no-cache",
+          }).then((result) => {
+            pricesResult = result;
+            return result;
+          });
+          const catalog = await fetchJsonWithRetry<{
+            data?: CardWithPrice[];
+            error?: string;
+          }>(cardsEndpoint(id, cat, releaseDate, setName, "catalog"));
+          if (stale()) return;
+          if (!catalog.res.ok) {
+            throw new Error(catalog.body.error || "Failed to load cards.");
+          }
+          const base = catalog.body.data || [];
+          if (pricesResult?.res.ok) {
+            applySnapshot(
+              mergeCardPrices(base, pricesResult.body.data || []),
+              pricesResult.body.meta || {},
+              Date.now(),
+            );
+            return;
+          }
+          applySnapshot(base, {}, 0);
+          const prices = pricesResult ?? (await pricesPromise);
+          if (stale()) return;
+          if (!prices.res.ok) {
+            setPricesRefreshing(false);
+            setPriceRefreshError(
+              prices.body.error ||
+                "Couldn't refresh prices — card art is still available.",
+            );
+            return;
+          }
+          applySnapshot(
+            mergeCardPrices(base, prices.body.data || []),
+            prices.body.meta || {},
+            Date.now(),
+          );
+          return;
+        }
+
+        const prices = await fetchJsonWithRetry<{
+          data?: CardPricePatch[];
+          meta?: PricePayloadMeta;
+          error?: string;
+        }>(cardsEndpoint(id, cat, releaseDate, setName, "prices"), {
+          cache: "no-cache",
+        });
+        if (stale()) return;
+        if (!prices.res.ok) {
+          setPricesRefreshing(false);
+          setPriceRefreshError(
+            "Couldn't refresh prices — showing the last saved prices.",
+          );
+          return;
+        }
+        applySnapshot(
+          mergeCardPrices(cached.cards, prices.body.data || []),
+          prices.body.meta || {},
+          Date.now(),
+        );
       } catch (e) {
+        if (stale()) return;
+        const message = e instanceof Error ? e.message : "Failed to load cards.";
+        if (cached || readSetCardCache(cat, id)) {
+          setCardsLoading(false);
+          setPricesRefreshing(false);
+          setPriceRefreshError(
+            "Couldn't refresh prices — showing the last saved prices.",
+          );
+          return;
+        }
         setCards([]);
         setPricedCount(0);
         setPriceSource(null);
         setFallbackUsed(false);
         setSetStats(null);
-        setCardsError(e instanceof Error ? e.message : "Failed to load cards.");
+        setCardsError(message);
         setCardsSetId(id);
-      } finally {
         setCardsLoading(false);
+        setPricesRefreshing(false);
       }
     },
     [],
@@ -343,6 +506,8 @@ export function ChaseApp() {
       setCardsError(null);
       setCardsLoading(false);
       setCardsSetId("");
+      setPricesRefreshing(false);
+      setPriceRefreshError(null);
       return;
     }
     void loadCards(
@@ -371,6 +536,8 @@ export function ChaseApp() {
     setSetStats(null);
     setCardsError(null);
     setCardsSetId("");
+    setPricesRefreshing(false);
+    setPriceRefreshError(null);
   }, []);
 
   const chaseSelection = useMemo(
@@ -768,7 +935,13 @@ export function ChaseApp() {
                           ? " · ranked by historical patterns"
                           : ""}
                         {chaseSubtitle}
+                        {pricesRefreshing ? " · updating prices…" : ""}
                       </p>
+                      {priceRefreshError ? (
+                        <p className="text-xs text-amber-200/80" role="status">
+                          {priceRefreshError}
+                        </p>
+                      ) : null}
                     </div>
                     {mode === "chase" ? (
                       <div
@@ -837,6 +1010,9 @@ export function ChaseApp() {
                           card={card}
                           rank={mode === "chase" ? i + 1 : undefined}
                           foil={mode === "chase"}
+                          pricePending={
+                            pricesRefreshing && card.marketPrice === null
+                          }
                         />
                       ))}
                     </div>
