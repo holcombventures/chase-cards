@@ -65,7 +65,9 @@ Stats are returned in `GET /api/sets/[setId]/cards` `meta.stats` (and also avail
 
 This app is **not** affiliated with Nintendo, The Pokémon Company, TCGPlayer, or TCGdex.
 
-**One Piece English (Phase 2B):** adapter in `src/lib/catalog/one-piece.ts`. Prefers OPTCG API when `OPTCG_API_KEY` is set; otherwise falls back to public [optcgapi.com](https://optcgapi.com) (`/api/allSets/`, `/api/sets/{id}/`). Images prefer `OPTCG /images/{card_id}` (public). MoM is N/A (no Cardmarket-style history). MTG / Sports adapters not built yet.
+**One Piece English (Phase 2B):** adapter in `src/lib/catalog/one-piece.ts`. Prefers OPTCG API when `OPTCG_API_KEY` is set; otherwise falls back to public [optcgapi.com](https://optcgapi.com) (`/api/allSets/`, `/api/sets/{id}/`). Images prefer `OPTCG /images/{card_id}` (public). MoM is N/A (no Cardmarket-style history).
+
+**Magic: The Gathering English:** adapter in `src/lib/catalog/mtg.ts` via public [Scryfall](https://api.scryfall.com) (keyless — no API key). English paper sets, `lang:en` cards, Scryfall image URLs, and USD prices only when Scryfall provides `usd` / `usd_foil` / `usd_etched`. Category status stays **`coming_soon`** until go-live, so `/api/sets?category=mtg` still returns 404. Sports adapter is not built.
 
 ## Stack
 
@@ -92,6 +94,7 @@ cp .env.example .env.local
 |---|---|---|
 | `POKEMONTCG_API_KEY` | No | API key from [dev.pokemontcg.io](https://dev.pokemontcg.io). Without it, public access is used and rate limits are stricter. If you hit HTTP 429, add a key and restart. |
 | `OPTCG_API_KEY` | No | `X-API-Key` for [OPTCG API](https://optcg-api.arjunbansal-ai.workers.dev). Without it, One Piece uses optcgapi.com fallback (sets/cards + prices). |
+| Scryfall | n/a | MTG English catalog uses the public Scryfall API. Keyless — no env var. Category remains `coming_soon`. |
 | `STRIPE_SECRET_KEY` / `STRIPE_PRICE_*` | No (demo fallback) | See [STRIPE.md](./STRIPE.md) for full Stripe Checkout env list and Netlify checklist. |
 
 ## Run
@@ -116,13 +119,13 @@ npm start
 ```
 src/
   app/
-    api/sets/                      # GET set list (?category=pokemon|one-piece)
+    api/sets/                      # GET set list (?category=pokemon|one-piece|mtg)
     api/sets/[setId]/cards/        # GET cards + prices + meta.stats
     api/sets/[setId]/stats/        # GET set statistics only
     api/stripe/checkout/           # POST create Checkout Session
     api/stripe/confirm/            # GET verify paid session → entitlements
     api/stripe/webhook/            # POST optional checkout.session.completed
-  lib/catalog/                     # category adapters (pokemon, one-piece)
+  lib/catalog/                     # category adapters (pokemon, one-piece, mtg)
     page.tsx                       # Home UI shell
     layout.tsx
   components/

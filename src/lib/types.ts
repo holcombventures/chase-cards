@@ -45,7 +45,8 @@ export type PriceSource =
   | "pokemontcg"
   | "tcgdex"
   | "optcg"
-  | "optcgapi";
+  | "optcgapi"
+  | "scryfall";
 
 export type CardWithPrice = PokemonCard & {
   /** Best usable market price (USD), or null if none */
@@ -61,6 +62,7 @@ export type CardsMetaPriceSource =
   | "tcgdex"
   | "optcg"
   | "optcgapi"
+  | "scryfall"
   | "mixed"
   | "none";
 

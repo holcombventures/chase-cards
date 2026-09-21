@@ -187,6 +187,9 @@ export function estimateChaseScore(
   if (categoryId === "one-piece") {
     return scoreOnePiece(card);
   }
+  if (categoryId === "mtg") {
+    return scoreMtg(card);
+  }
   return scorePokemon(card);
 }
 
@@ -236,6 +239,16 @@ function scorePokemon(card: CardWithPrice): number {
     else if (ratio >= 0.85) score += 8;
   }
 
+  return score;
+}
+
+function scoreMtg(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase();
+  if (/mythic/.test(rarity)) score += 80;
+  else if (/special/.test(rarity)) score += 60;
+  else if (/rare/.test(rarity)) score += 40;
+  else if (/uncommon/.test(rarity)) score += 10;
   return score;
 }
 

@@ -22,6 +22,8 @@ export function priceSourceLabel(source: CardsMetaPriceSource | null | undefined
       return "Source: OPTCG API (USD price field)";
     case "optcgapi":
       return "Source: optcgapi.com (market_price USD)";
+    case "scryfall":
+      return "Source: Scryfall (USD)";
     case "mixed":
       return "Source: mixed — Pokémon TCG API + TCGdex (TCGPlayer)";
     case "none":

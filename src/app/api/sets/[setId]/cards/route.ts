@@ -34,6 +34,8 @@ import {
 import * as pokemonCatalog from "@/lib/catalog/pokemon";
 import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
+import * as mtgCatalog from "@/lib/catalog/mtg";
+import { MtgApiError } from "@/lib/catalog/mtg";
 import {
   mergeFullBodyWithSnapshot,
   priceCacheRefreshAllowed,
@@ -355,6 +357,51 @@ async function handleOnePiece(
   });
 }
 
+async function handleMtg(setId: string, releaseDateParam: string | null) {
+  const { cards: raw, meta: fetchMeta } = await mtgCatalog.fetchCards(setId);
+  const backend: PriceSource = fetchMeta.priceBackend;
+
+  const cards: CardWithPrice[] = normalizeCardsSetTotals(
+    raw.map((card) => {
+      const enriched = enrichCard(card);
+      return {
+        ...enriched,
+        priceSource: enriched.marketPrice !== null ? backend : null,
+      };
+    }),
+  );
+
+  const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
+  const priceSource: CardsMetaPriceSource =
+    pricedCount > 0 ? backend : "none";
+
+  const stats = buildSetStats({
+    cards,
+    priceSource,
+    releaseDate: releaseDateParam,
+    tcgdexBundle: null,
+    tcgdexAttempted: false,
+    momUnavailableReason:
+      "Scryfall catalog has no Cardmarket-style ~30-day history",
+  });
+
+  return NextResponse.json({
+    data: cards,
+    meta: {
+      category: "mtg",
+      total: cards.length,
+      pricedCount,
+      missingPriceCount: cards.length - pricedCount,
+      priceSource,
+      fallbackUsed: false,
+      priceBackend: fetchMeta.priceBackend,
+      releaseDate: releaseDateParam,
+      stats,
+      pricesAsOf: pricesAsOfNow(),
+    },
+  });
+}
+
 async function loadFullCardsResponse(request: Request, { params }: Params) {
   const { setId } = await params;
 
@@ -379,6 +426,9 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
     if (category === "one-piece") {
       return await handleOnePiece(setId, releaseDateParam);
     }
+    if (category === "mtg") {
+      return await handleMtg(setId, releaseDateParam);
+    }
     return await handlePokemon(setId, releaseDateParam, setNameParam);
   } catch (err) {
     if (err instanceof PokemonTcgApiError) {
@@ -391,6 +441,15 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
       return NextResponse.json(
         { error: err.message },
         { status: err.status === 429 ? 429 : 502 },
+      );
+    }
+    if (err instanceof MtgApiError) {
+      return NextResponse.json(
+        { error: err.message },
+        {
+          status:
+            err.status === 429 ? 429 : err.status === 404 ? 404 : err.status === 400 ? 400 : 502,
+        },
       );
     }
     if (err instanceof CatalogNotLiveError) {

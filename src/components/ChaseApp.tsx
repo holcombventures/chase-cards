@@ -196,6 +196,7 @@ export function ChaseApp() {
   const catalogLive = isLiveCategory(categoryId);
   const isPokemon = categoryId === "pokemon";
   const isOnePiece = categoryId === "one-piece";
+  const isMtg = categoryId === "mtg";
   const fullAccessHere = hasFullAccessInCategory(categoryId);
   const categoryHint = categoryEntitlementHint(entitlements, categoryId);
   const ownsThis = ownsCategory(categoryId);
@@ -646,6 +647,9 @@ export function ChaseApp() {
     hasPricedCards &&
     (priceSource === "optcg" || priceSource === "optcgapi");
 
+  const showMtgPriceNote =
+    isMtg && hasPricedCards && priceSource === "scryfall";
+
   const unlockActions: GateAction[] = useMemo(() => {
     const actions: GateAction[] = [];
     if (!isPremium) {
@@ -1048,6 +1052,11 @@ export function ChaseApp() {
                         : "Prices via optcgapi.com (market_price USD) · OPTCG key optional for primary host"}
                     </p>
                   ) : null}
+                  {showMtgPriceNote ? (
+                    <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100/90">
+                      Prices via Scryfall (USD) when provided
+                    </p>
+                  ) : null}
                   {mode === "chase" && chaseMode === "estimated" && chaseNote ? (
                     <p className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-3 py-2 text-xs text-sky-100/90">
                       {chaseNote}
@@ -1163,8 +1172,17 @@ export function ChaseApp() {
         >
           optcgapi.com
         </a>
-        . Market prices never invented. Not affiliated with Bandai, Nintendo, or
-        TPC.
+        . Magic: The Gathering English data via{" "}
+        <a
+          className="text-amber-300/80 underline-offset-2 hover:underline"
+          href="https://scryfall.com"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Scryfall
+        </a>
+        . Market prices never invented. Not affiliated with Bandai, Nintendo,
+        TPC, or Wizards of the Coast.
         {entitlementsReady ? (
           <>
             {" "}

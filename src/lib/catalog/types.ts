@@ -1,7 +1,8 @@
 /**
  * Multi-category catalog config.
  * Pokémon and One Piece English are live (OP uses public optcgapi.com without a key).
- * MTG / Sports stay Coming Soon — no adapter yet.
+ * MTG English adapter is registered (Scryfall, keyless) but status stays coming_soon.
+ * Sports stays coming_soon — no adapter.
  */
 
 export type CategoryId = "pokemon" | "one-piece" | "mtg" | "sports";
