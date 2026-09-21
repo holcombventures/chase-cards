@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PokemonTcgApiError } from "@/lib/api";
 import {
   assertLiveCatalog,
+  CatalogNotLiveError,
   hasCatalogAdapter,
   isCategoryId,
   type CategoryId,
@@ -64,6 +65,9 @@ export async function GET(request: Request) {
         { error: err.message },
         { status: err.status === 429 ? 429 : 502 },
       );
+    }
+    if (err instanceof CatalogNotLiveError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error(err);
     return NextResponse.json(

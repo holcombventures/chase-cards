@@ -11,6 +11,7 @@ import { buildSetStats } from "@/lib/stats";
 import type { CardWithPrice, CardsMetaPriceSource, PriceSource } from "@/lib/types";
 import {
   assertLiveCatalog,
+  CatalogNotLiveError,
   hasCatalogAdapter,
   isCategoryId,
   type CategoryId,
@@ -251,6 +252,9 @@ export async function GET(request: Request, { params }: Params) {
         { error: err.message },
         { status: err.status === 429 ? 429 : 502 },
       );
+    }
+    if (err instanceof CatalogNotLiveError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error(err);
     return NextResponse.json(
