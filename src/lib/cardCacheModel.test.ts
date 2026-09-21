@@ -30,7 +30,7 @@ import {
   SET_CARD_CACHE_LIMIT,
   writeSetCardCache,
 } from "./setCardCache";
-import { sortBySetNumber } from "./prices";
+import { selectChaseCards, sortBySetNumber } from "./prices";
 import type { CardWithPrice } from "./types";
 
 function sampleCard(overrides: Partial<CardWithPrice> = {}): CardWithPrice {
@@ -206,6 +206,37 @@ test("a price payload is not treated as a card catalog", () => {
   assert.equal(fromFullCards?.[0].id, "base1-4");
   assert.equal(normalizePricePatches(prices)?.[0].marketPrice, 400);
   assert.equal(normalizePricePatches([{ id: 1 }]), null);
+});
+
+test("default-set price rows do not crash chase ranking on first paint", () => {
+  // Production initial load: catalog URL returned this shape for me55c
+  // (no number/name) and every marketPrice was null, so ranking took the
+  // estimated path and called parseSetNumber(undefined).
+  const rows = [
+    {
+      id: "me55c-001",
+      marketPrice: null,
+      priceVariant: null,
+      priceUpdatedAt: null,
+      priceSource: null,
+    },
+    {
+      id: "me55c-002",
+      marketPrice: null,
+      priceVariant: null,
+      priceUpdatedAt: null,
+      priceSource: null,
+    },
+  ];
+  assert.equal(normalizeCatalogCards(rows), null);
+  assert.doesNotThrow(() =>
+    selectChaseCards(rows as unknown as CardWithPrice[], { categoryId: "pokemon" }),
+  );
+  const ranked = selectChaseCards(rows as unknown as CardWithPrice[], {
+    categoryId: "pokemon",
+  });
+  assert.equal(ranked.mode, "estimated");
+  assert.equal(ranked.cards.length, 1);
 });
 
 test("sorting price rows or missing numbers does not throw", () => {
