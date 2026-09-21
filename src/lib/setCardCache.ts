@@ -1,6 +1,6 @@
 import type { CardsMetaPriceSource, SetStats } from "./types";
 import type { CatalogCard } from "./cardCacheModel";
-import { slimCardWithPrices } from "./cardCacheModel";
+import { isCatalogCard, slimCardWithPrices } from "./cardCacheModel";
 
 const STORAGE_KEY = "chase-cards-set-cache-v1";
 export const SET_CARD_CACHE_LIMIT = 8;
@@ -64,9 +64,15 @@ export function readSetCardCache(
 ): CachedSetSnapshot | null {
   hydrateFromSession();
   if (!categoryId || !setId) return null;
-  const hit = memory.get(cacheKey(categoryId, setId));
+  const key = cacheKey(categoryId, setId);
+  const hit = memory.get(key);
   if (!hit) return null;
-  memory.delete(cacheKey(categoryId, setId));
+  if (!hit.cards.every((card) => isCatalogCard(card))) {
+    memory.delete(key);
+    persistSession();
+    return null;
+  }
+  memory.delete(key);
   memory.set(cacheKey(categoryId, setId), hit);
   return hit;
 }
@@ -80,10 +86,12 @@ export function resetSetCardCacheForTests(): void {
 export function writeSetCardCache(snapshot: CachedSetSnapshot): void {
   hydrateFromSession();
   const key = cacheKey(snapshot.categoryId, snapshot.setId);
+  const cards = snapshot.cards.map(slimCardWithPrices).filter(isCatalogCard);
+  if (cards.length === 0 && snapshot.cards.length > 0) return;
   memory.delete(key);
   memory.set(key, {
     ...snapshot,
-    cards: snapshot.cards.map(slimCardWithPrices),
+    cards,
   });
   while (memory.size > SET_CARD_CACHE_LIMIT) {
     const oldest = memory.keys().next().value;

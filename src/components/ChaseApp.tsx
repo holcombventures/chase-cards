@@ -39,7 +39,11 @@ import { isCheckoutEntitlementKey } from "@/lib/stripe/catalog";
 import { confirmCheckoutSession } from "@/lib/stripe/startCheckout";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 import { fetchJsonWithRetry } from "@/lib/fetchJson";
-import { mergeCardPrices, type CardPricePatch } from "@/lib/cardCacheModel";
+import {
+  mergeCardPrices,
+  normalizeCatalogCards,
+  normalizePricePatches,
+} from "@/lib/cardCacheModel";
 import { readSetCardCache, writeSetCardCache } from "@/lib/setCardCache";
 
 /** How many blurred teaser tiles to show under the free chase list */
@@ -61,10 +65,11 @@ function cardsEndpoint(
 ): string {
   const qs = new URLSearchParams();
   qs.set("category", cat);
-  if (part) qs.set("part", part);
   if (releaseDate) qs.set("releaseDate", releaseDate);
   if (setName) qs.set("setName", setName);
-  return `/api/sets/${encodeURIComponent(id)}/cards?${qs.toString()}`;
+  // Path, not ?part=, so catalog and prices cannot share a Netlify cache key.
+  const suffix = part ? `/${part}` : "";
+  return `/api/sets/${encodeURIComponent(id)}/cards${suffix}?${qs.toString()}`;
 }
 
 
@@ -391,20 +396,22 @@ export function ChaseApp() {
         setPriceRefreshError(null);
       };
 
+      let paintedCatalog = Boolean(cached);
+
       try {
         if (!cached) {
           let pricesResult:
             | {
                 res: Response;
                 body: {
-                  data?: CardPricePatch[];
+                  data?: unknown;
                   meta?: PricePayloadMeta;
                   error?: string;
                 };
               }
             | undefined;
           const pricesPromise = fetchJsonWithRetry<{
-            data?: CardPricePatch[];
+            data?: unknown;
             meta?: PricePayloadMeta;
             error?: string;
           }>(cardsEndpoint(id, cat, releaseDate, setName, "prices"), {
@@ -414,26 +421,49 @@ export function ChaseApp() {
             return result;
           });
           const catalog = await fetchJsonWithRetry<{
-            data?: CardWithPrice[];
+            data?: unknown;
             error?: string;
           }>(cardsEndpoint(id, cat, releaseDate, setName, "catalog"));
           if (stale()) return;
-          if (!catalog.res.ok) {
+          const base = catalog.res.ok
+            ? normalizeCatalogCards(catalog.body.data)
+            : null;
+          if (!base) {
             throw new Error(catalog.body.error || "Failed to load cards.");
           }
-          const base = catalog.body.data || [];
-          if (pricesResult?.res.ok) {
+          const earlyPatches =
+            pricesResult?.res.ok === true
+              ? normalizePricePatches(pricesResult.body.data)
+              : null;
+          if (pricesResult?.res.ok && earlyPatches) {
             applySnapshot(
-              mergeCardPrices(base, pricesResult.body.data || []),
+              mergeCardPrices(base, earlyPatches),
               pricesResult.body.meta || {},
               Date.now(),
             );
+            paintedCatalog = true;
             return;
           }
           applySnapshot(base, {}, 0);
-          const prices = pricesResult ?? (await pricesPromise);
+          paintedCatalog = true;
+          let prices = pricesResult;
+          if (!prices) {
+            try {
+              prices = await pricesPromise;
+            } catch {
+              if (stale()) return;
+              setPricesRefreshing(false);
+              setPriceRefreshError(
+                "Couldn't refresh prices — card art is still available.",
+              );
+              return;
+            }
+          }
           if (stale()) return;
-          if (!prices.res.ok) {
+          const patches = prices.res.ok
+            ? normalizePricePatches(prices.body.data)
+            : null;
+          if (!prices.res.ok || !patches) {
             setPricesRefreshing(false);
             setPriceRefreshError(
               prices.body.error ||
@@ -442,7 +472,7 @@ export function ChaseApp() {
             return;
           }
           applySnapshot(
-            mergeCardPrices(base, prices.body.data || []),
+            mergeCardPrices(base, patches),
             prices.body.meta || {},
             Date.now(),
           );
@@ -450,14 +480,17 @@ export function ChaseApp() {
         }
 
         const prices = await fetchJsonWithRetry<{
-          data?: CardPricePatch[];
+          data?: unknown;
           meta?: PricePayloadMeta;
           error?: string;
         }>(cardsEndpoint(id, cat, releaseDate, setName, "prices"), {
           cache: "no-cache",
         });
         if (stale()) return;
-        if (!prices.res.ok) {
+        const patches = prices.res.ok
+          ? normalizePricePatches(prices.body.data)
+          : null;
+        if (!prices.res.ok || !patches) {
           setPricesRefreshing(false);
           setPriceRefreshError(
             "Couldn't refresh prices — showing the last saved prices.",
@@ -465,18 +498,18 @@ export function ChaseApp() {
           return;
         }
         applySnapshot(
-          mergeCardPrices(cached.cards, prices.body.data || []),
+          mergeCardPrices(cached.cards, patches),
           prices.body.meta || {},
           Date.now(),
         );
       } catch (e) {
         if (stale()) return;
         const message = e instanceof Error ? e.message : "Failed to load cards.";
-        if (cached || readSetCardCache(cat, id)) {
+        if (paintedCatalog || cached || readSetCardCache(cat, id)) {
           setCardsLoading(false);
           setPricesRefreshing(false);
           setPriceRefreshError(
-            "Couldn't refresh prices — showing the last saved prices.",
+            "Couldn't refresh prices — card art is still available.",
           );
           return;
         }

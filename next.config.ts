@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "images.scrydex.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "assets.tcgdex.net",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
         hostname: "optcg-api.arjunbansal-ai.workers.dev",
         pathname: "/images/**",
       },

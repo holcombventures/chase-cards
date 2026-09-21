@@ -3,8 +3,12 @@ import { afterEach, test } from "node:test";
 import {
   applyPricePatches,
   cacheHeaders,
+  CARDS_NETLIFY_VARY,
   catalogIsFresh,
+  isCatalogCard,
   mergeCardPrices,
+  normalizeCatalogCards,
+  normalizePricePatches,
   payloadCacheKey,
   pricesAreFresh,
   PRICE_MEMORY_TTL_MS,
@@ -26,6 +30,7 @@ import {
   SET_CARD_CACHE_LIMIT,
   writeSetCardCache,
 } from "./setCardCache";
+import { selectChaseCards, sortBySetNumber } from "./prices";
 import type { CardWithPrice } from "./types";
 
 function sampleCard(overrides: Partial<CardWithPrice> = {}): CardWithPrice {
@@ -113,6 +118,10 @@ test("cache headers split catalog from prices", () => {
   assert.match(catalog["Netlify-CDN-Cache-Control"], /s-maxage=86400/);
   assert.match(prices["Cache-Control"], /max-age=0/);
   assert.match(prices["Netlify-CDN-Cache-Control"], /s-maxage=60/);
+  assert.equal(catalog["Netlify-Vary"], CARDS_NETLIFY_VARY);
+  assert.match(catalog["Netlify-Vary"], /query=[^,\s]*part/);
+  assert.match(prices["Netlify-Vary"], /category/);
+  assert.equal(full["Netlify-Vary"], undefined);
   assert.equal(full["Cache-Control"], "private, no-store");
   assert.equal(pricesAreFresh(1_000, 1_000 + PRICE_MEMORY_TTL_MS), true);
   assert.equal(pricesAreFresh(1_000, 1_000 + PRICE_MEMORY_TTL_MS + 1), false);
@@ -185,6 +194,75 @@ test("server payload cache evicts the oldest set", () => {
   }
   assert.equal(readCachedPayload("pokemon|set-0||", now), null);
   assert.ok(readCachedPayload(`pokemon|set-${MAX_PAYLOAD_ENTRIES}||`, now));
+});
+
+test("a price payload is not treated as a card catalog", () => {
+  const prices = toPricesBody(fullBody).data;
+  assert.equal(isCatalogCard(prices[0]), false);
+  assert.equal(normalizeCatalogCards(prices), null);
+  assert.equal(normalizeCatalogCards(fullBody.data)?.[0].number, "4");
+  const fromFullCards = normalizePricePatches(fullBody.data);
+  assert.equal(fromFullCards?.[0].marketPrice, 400);
+  assert.equal(fromFullCards?.[0].id, "base1-4");
+  assert.equal(normalizePricePatches(prices)?.[0].marketPrice, 400);
+  assert.equal(normalizePricePatches([{ id: 1 }]), null);
+});
+
+test("default-set price rows do not crash chase ranking on first paint", () => {
+  // Production initial load: catalog URL returned this shape for me55c
+  // (no number/name) and every marketPrice was null, so ranking took the
+  // estimated path and called parseSetNumber(undefined).
+  const rows = [
+    {
+      id: "me55c-001",
+      marketPrice: null,
+      priceVariant: null,
+      priceUpdatedAt: null,
+      priceSource: null,
+    },
+    {
+      id: "me55c-002",
+      marketPrice: null,
+      priceVariant: null,
+      priceUpdatedAt: null,
+      priceSource: null,
+    },
+  ];
+  assert.equal(normalizeCatalogCards(rows), null);
+  assert.doesNotThrow(() =>
+    selectChaseCards(rows as unknown as CardWithPrice[], { categoryId: "pokemon" }),
+  );
+  const ranked = selectChaseCards(rows as unknown as CardWithPrice[], {
+    categoryId: "pokemon",
+  });
+  assert.equal(ranked.mode, "estimated");
+  assert.equal(ranked.cards.length, 1);
+});
+
+test("sorting price rows or missing numbers does not throw", () => {
+  const prices = toPricesBody(fullBody).data as unknown as CardWithPrice[];
+  assert.doesNotThrow(() => sortBySetNumber(prices));
+  assert.doesNotThrow(() =>
+    sortBySetNumber([
+      sampleCard({ number: undefined as unknown as string, name: undefined as unknown as string }),
+      sampleCard({ id: "base1-2", number: "10" }),
+    ]),
+  );
+});
+
+test("client set cache rejects a price-only snapshot", () => {
+  writeSetCardCache({
+    categoryId: "pokemon",
+    setId: "me3",
+    cards: toPricesBody(fullBody).data as unknown as CardWithPrice[],
+    pricedCount: 1,
+    priceSource: "tcgdex",
+    fallbackUsed: false,
+    stats: null,
+    cachedAt: 1,
+    pricesAt: 1,
+  });
+  assert.equal(readSetCardCache("pokemon", "me3"), null);
 });
 
 test("client set cache keeps art and prices and evicts oldest", () => {
