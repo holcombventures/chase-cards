@@ -19,6 +19,8 @@ import {
 import * as pokemonCatalog from "@/lib/catalog/pokemon";
 import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
+import { priceCacheRefreshAllowed } from "@/lib/priceSnapshot";
+import { readFreshPriceSnapshot } from "@/lib/priceSnapshotStore";
 
 type Params = { params: Promise<{ setId: string }> };
 
@@ -71,8 +73,33 @@ export async function GET(request: Request, { params }: Params) {
   const releaseDateParam = url.searchParams.get("releaseDate");
   const setNameParam = url.searchParams.get("setName");
 
+  const refreshPrices =
+    url.searchParams.get("priceCache") === "refresh" &&
+    priceCacheRefreshAllowed();
+
   try {
     assertLiveCatalog(category);
+
+    if (!refreshPrices) {
+      const snap = await readFreshPriceSnapshot(category, setId);
+      if (snap?.meta.stats) {
+        return NextResponse.json({
+          data: snap.meta.stats,
+          meta: {
+            category,
+            setId,
+            total: snap.meta.total ?? snap.data.length,
+            pricedCount:
+              snap.meta.pricedCount ??
+              snap.data.filter((card) => card.marketPrice !== null).length,
+            priceSource: snap.meta.priceSource ?? "none",
+            releaseDate: snap.meta.releaseDate ?? releaseDateParam,
+            pricesAsOf: snap.pricesAsOf,
+            priceCache: "hit" as const,
+          },
+        });
+      }
+    }
 
     if (category === "one-piece") {
       const { cards: raw, meta: fetchMeta } = await onePieceCatalog.fetchCards(setId);

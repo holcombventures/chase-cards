@@ -1,10 +1,12 @@
 "use client";
 
 import type { SetStatMetric, SetStats } from "@/lib/types";
+import { formatPricesAsOf } from "@/lib/prices";
 
 type Props = {
   stats: SetStats;
   setName?: string | null;
+  pricesAsOf?: string | null;
 };
 
 function TrendGlyph({ direction }: { direction?: "up" | "down" | "flat" | null }) {
@@ -69,7 +71,8 @@ function MetricCard({
   );
 }
 
-export function SetStatsPanel({ stats, setName }: Props) {
+export function SetStatsPanel({ stats, setName, pricesAsOf }: Props) {
+  const pricesAsOfLabel = formatPricesAsOf(pricesAsOf);
   return (
     <section
       className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-2.5 sm:p-4"
@@ -86,6 +89,9 @@ export function SetStatsPanel({ stats, setName }: Props) {
           Free + Premium · sources labeled on every metric
         </p>
       </div>
+      {pricesAsOfLabel ? (
+        <p className="mb-2 text-[11px] text-slate-400 sm:mb-3">{pricesAsOfLabel}</p>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <MetricCard label="Total set value" metric={stats.totalSetValue} />
         <MetricCard label="Month-over-month" metric={stats.mom} />
