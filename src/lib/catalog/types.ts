@@ -1,7 +1,8 @@
 /**
  * Multi-category catalog config.
  * Pokémon and One Piece English are live (OP uses public optcgapi.com without a key).
- * MTG English adapter is registered (Scryfall, keyless) but status stays coming_soon.
+ * MTG English is live on this branch so deploy previews can load sets, cards, and prices.
+ * Do not merge that status to main until COO approves go-live.
  * Sports stays coming_soon — no adapter.
  */
 
@@ -41,7 +42,8 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     label: "Magic: The Gathering",
     shortLabel: "MTG",
     priceLabel: "$2.99",
-    status: "coming_soon",
+    // Preview-only. Revert to coming_soon before merge unless COO approves go-live.
+    status: "live",
   },
   {
     id: "sports",

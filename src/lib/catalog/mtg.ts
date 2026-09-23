@@ -8,8 +8,8 @@
  * Prices: USD fields Scryfall actually returns (`usd`, `usd_foil`, `usd_etched`).
  * Never invent a price. MoM is N/A (no Cardmarket-style history).
  *
- * Category status stays `coming_soon` until go-live — this module is not served
- * by the public API routes while `assertLiveCatalog` rejects `mtg`.
+ * This branch sets category status to `live` so public routes serve the adapter
+ * on deploy previews. Revert to `coming_soon` before merge unless COO approves.
  */
 
 import type { PokemonCard, PokemonSet } from "@/lib/types";
