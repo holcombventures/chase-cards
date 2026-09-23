@@ -296,6 +296,21 @@ function parseSetNumber(n: string | null | undefined): { prefix: string; num: nu
   return { prefix: match[1] || "", num: parseInt(match[2], 10) };
 }
 
+/** Visible label so market prices are not read as tick-live. */
+export function formatPricesAsOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+  return `Prices as of ${formatted}`;
+}
+
 export function formatPrice(value: number | null): string {
   if (value === null) return "—";
   return new Intl.NumberFormat("en-US", {

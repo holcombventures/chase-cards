@@ -8,7 +8,7 @@ import type {
   SetStats,
   ViewMode,
 } from "@/lib/types";
-import { selectChaseCards, sortBySetNumber } from "@/lib/prices";
+import { formatPricesAsOf, selectChaseCards, sortBySetNumber } from "@/lib/prices";
 
 import {
   DEFAULT_CATEGORY_ID,
@@ -54,6 +54,7 @@ type PricePayloadMeta = {
   priceSource?: CardsMetaPriceSource;
   fallbackUsed?: boolean;
   stats?: SetStats;
+  pricesAsOf?: string | null;
 };
 
 function cardsEndpoint(
@@ -241,6 +242,7 @@ export function ChaseApp() {
   const [cardsSetId, setCardsSetId] = useState("");
   const [pricesRefreshing, setPricesRefreshing] = useState(false);
   const [priceRefreshError, setPriceRefreshError] = useState<string | null>(null);
+  const [pricesAsOf, setPricesAsOf] = useState<string | null>(null);
   const loadGen = useRef(0);
 
   // Restore a set the visitor already opened before paint, so <img> tags
@@ -253,6 +255,7 @@ export function ChaseApp() {
       setPriceSource(cached.priceSource);
       setFallbackUsed(cached.fallbackUsed);
       setSetStats(cached.stats);
+      setPricesAsOf(cached.pricesAsOf ?? null);
       setCardsError(null);
       setCardsLoading(false);
       setCardsSetId(setId);
@@ -337,6 +340,7 @@ export function ChaseApp() {
         setPriceSource(null);
         setFallbackUsed(false);
         setSetStats(null);
+        setPricesAsOf(null);
         setCardsError(null);
         setCardsSetId("");
         setCardsLoading(false);
@@ -353,7 +357,9 @@ export function ChaseApp() {
         setCardsLoading(true);
         setCardsError(null);
         setPriceRefreshError(null);
+        setPricesAsOf(null);
       } else {
+        setPricesAsOf(cached.pricesAsOf ?? null);
         setCardsLoading(false);
         setCardsError(null);
         setPriceRefreshError(null);
@@ -372,6 +378,10 @@ export function ChaseApp() {
         const nextPriceSource = meta.priceSource ?? null;
         const nextFallback = Boolean(meta.fallbackUsed);
         const nextStats = meta.stats ?? null;
+        const nextPricesAsOf =
+          typeof meta.pricesAsOf === "string" && meta.pricesAsOf
+            ? meta.pricesAsOf
+            : null;
         writeSetCardCache({
           categoryId: cat,
           setId: id,
@@ -382,6 +392,7 @@ export function ChaseApp() {
           stats: nextStats,
           cachedAt: Date.now(),
           pricesAt,
+          pricesAsOf: nextPricesAsOf,
         });
         if (stale()) return;
         setCards(nextCards);
@@ -389,6 +400,7 @@ export function ChaseApp() {
         setPriceSource(nextPriceSource);
         setFallbackUsed(nextFallback);
         setSetStats(nextStats);
+        setPricesAsOf(nextPricesAsOf);
         setCardsError(null);
         setCardsSetId(id);
         setCardsLoading(false);
@@ -518,6 +530,7 @@ export function ChaseApp() {
         setPriceSource(null);
         setFallbackUsed(false);
         setSetStats(null);
+        setPricesAsOf(null);
         setCardsError(message);
         setCardsSetId(id);
         setCardsLoading(false);
@@ -536,6 +549,7 @@ export function ChaseApp() {
       setPriceSource(null);
       setFallbackUsed(false);
       setSetStats(null);
+      setPricesAsOf(null);
       setCardsError(null);
       setCardsLoading(false);
       setCardsSetId("");
@@ -567,6 +581,7 @@ export function ChaseApp() {
     setPriceSource(null);
     setFallbackUsed(false);
     setSetStats(null);
+    setPricesAsOf(null);
     setCardsError(null);
     setCardsSetId("");
     setPricesRefreshing(false);
@@ -696,6 +711,8 @@ export function ChaseApp() {
     }
     return `Full ${category.shortLabel} access needs Premium (choose this category), the ${category.shortLabel} add-on, or All Access.`;
   })();
+
+  const pricesAsOfLabel = formatPricesAsOf(pricesAsOf);
 
   const chaseSubtitle = (() => {
     if (!catalogLive || !setId || uiCardsLoading || cardsError || !chaseReady)
@@ -896,7 +913,11 @@ export function ChaseApp() {
           ) : (
             <>
               {setStats ? (
-                <SetStatsPanel stats={setStats} setName={selectedSet?.name} />
+                <SetStatsPanel
+                  stats={setStats}
+                  setName={selectedSet?.name}
+                  pricesAsOf={pricesAsOf}
+                />
               ) : null}
 
               {/* Try free · Top 3 scrolls here — set collection only, not Statistics */}
@@ -970,6 +991,9 @@ export function ChaseApp() {
                         {chaseSubtitle}
                         {pricesRefreshing ? " · updating prices…" : ""}
                       </p>
+                      {pricesAsOfLabel ? (
+                        <p className="text-xs text-slate-500">{pricesAsOfLabel}</p>
+                      ) : null}
                       {priceRefreshError ? (
                         <p className="text-xs text-amber-200/80" role="status">
                           {priceRefreshError}

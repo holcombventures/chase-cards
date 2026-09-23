@@ -16,6 +16,8 @@ export type CachedSetSnapshot = {
   cachedAt: number;
   /** 0 until a price payload has been merged. */
   pricesAt: number;
+  /** ISO time from the price snapshot. Absent on older session entries. */
+  pricesAsOf?: string | null;
 };
 
 const memory = new Map<string, CachedSetSnapshot>();

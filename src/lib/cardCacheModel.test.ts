@@ -121,6 +121,7 @@ test("cache headers split catalog from prices", () => {
   assert.equal(catalog["Netlify-Vary"], CARDS_NETLIFY_VARY);
   assert.match(catalog["Netlify-Vary"], /query=[^,\s]*part/);
   assert.match(prices["Netlify-Vary"], /category/);
+  assert.match(prices["Netlify-Vary"], /priceCache/);
   assert.equal(full["Netlify-Vary"], undefined);
   assert.equal(full["Cache-Control"], "private, no-store");
   assert.equal(pricesAreFresh(1_000, 1_000 + PRICE_MEMORY_TTL_MS), true);
@@ -185,6 +186,19 @@ test("payload key ignores part and shares one upstream load", async () => {
   );
   assert.equal(calls, 2);
   assert.equal(refreshed.ok && refreshed.body.data[0].marketPrice, 999);
+
+  let forced = 0;
+  const forcedResult = await loadSharedPayload(
+    key,
+    async () => {
+      forced += 1;
+      return { ok: true as const, body: fullBody };
+    },
+    5_000 + PRICE_MEMORY_TTL_MS + 5,
+    { refreshPrices: true },
+  );
+  assert.equal(forced, 1);
+  assert.equal(forcedResult.ok, true);
 });
 
 test("server payload cache evicts the oldest set", () => {

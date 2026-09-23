@@ -55,9 +55,10 @@ export function loadSharedPayload(
   key: string,
   loader: () => Promise<PayloadLoadResult>,
   now = Date.now(),
+  options?: { refreshPrices?: boolean },
 ): Promise<PayloadLoadResult> {
   const hit = readCachedPayload(key, now);
-  if (hit && pricesAreFresh(hit.storedAt, now)) {
+  if (hit && !options?.refreshPrices && pricesAreFresh(hit.storedAt, now)) {
     return Promise.resolve({ ok: true, body: hit.body });
   }
 

@@ -29,6 +29,10 @@ export type CardsApiMeta = {
   stats?: SetStats | null;
   catalogSource?: string;
   part?: "catalog" | "prices" | "full";
+  /** ISO time the price snapshot was fetched. Not a live tick. */
+  pricesAsOf?: string | null;
+  /** Where this price response was served from. */
+  priceCache?: "hit" | "miss" | "memory";
 };
 
 export type CardsApiBody = {
@@ -59,9 +63,13 @@ export const FULL_CACHE_CONTROL = "private, no-store";
  * have to be listed or catalog and price responses overwrite each other.
  */
 export const CARDS_NETLIFY_VARY =
-  "query=part|category|releaseDate|setName|__nextDataReq|_rsc,header=x-nextjs-data|x-next-debug-logging|next-router-prefetch|next-router-segment-prefetch|next-router-state-tree|next-url|rsc,cookie=__prerender_bypass|__next_preview_data";
+  "query=part|category|releaseDate|setName|priceCache|__nextDataReq|_rsc,header=x-nextjs-data|x-next-debug-logging|next-router-prefetch|next-router-segment-prefetch|next-router-state-tree|next-url|rsc,cookie=__prerender_bypass|__next_preview_data";
 
 export const CATALOG_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Hot cache inside one instance. The durable ~4h snapshot shared by every
+ * Netlify instance lives in `priceSnapshot.ts` (Netlify Blobs).
+ */
 export const PRICE_MEMORY_TTL_MS = 60 * 1000;
 
 export function cacheHeaders(

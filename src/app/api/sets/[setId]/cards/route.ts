@@ -8,6 +8,7 @@ import {
   toCatalogBody,
   toPricesBody,
   type CardsApiBody,
+  type CardsApiMeta,
 } from "@/lib/cardCacheModel";
 import {
   loadSharedPayload,
@@ -33,6 +34,17 @@ import {
 import * as pokemonCatalog from "@/lib/catalog/pokemon";
 import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
+import {
+  mergeFullBodyWithSnapshot,
+  priceCacheRefreshAllowed,
+  pricePayloadFromSnapshot,
+  type PriceCacheState,
+} from "@/lib/priceSnapshot";
+import {
+  readFreshPriceSnapshot,
+  savePriceSnapshot,
+  priceSnapshotStoreKind,
+} from "@/lib/priceSnapshotStore";
 
 type Params = { params: Promise<{ setId: string }> };
 
@@ -41,6 +53,49 @@ type Params = { params: Promise<{ setId: string }> };
  * Catalog vs price freshness is controlled by the HTTP cache headers below.
  */
 export const dynamic = "force-dynamic";
+
+function pricesAsOfNow(): string {
+  return new Date().toISOString();
+}
+
+function withPriceCache<T extends { meta?: CardsApiMeta }>(
+  payload: T,
+  priceCache: PriceCacheState,
+): T {
+  return {
+    ...payload,
+    meta: { ...payload.meta, priceCache },
+  };
+}
+
+function priceResponseHeaders(
+  part: "prices" | "full",
+  priceCache: PriceCacheState,
+): Record<string, string> {
+  return {
+    ...cacheHeaders(part),
+    "x-price-cache": priceCache,
+    "x-price-store": priceSnapshotStoreKind(),
+  };
+}
+
+/** Persist a successful upstream price payload when the shared snapshot is stale. */
+async function rememberPriceSnapshot(
+  category: string,
+  setId: string,
+  body: CardsApiBody,
+  force: boolean,
+): Promise<void> {
+  try {
+    if (!force) {
+      const fresh = await readFreshPriceSnapshot(category, setId);
+      if (fresh) return;
+    }
+    await savePriceSnapshot(category, setId, body);
+  } catch (err) {
+    console.error("price snapshot write failed:", err);
+  }
+}
 
 function parseCategory(request: Request): CategoryId {
   const url = new URL(request.url);
@@ -199,6 +254,7 @@ async function handlePokemon(
             releaseDate,
             stats,
             catalogSource: "tcgdex",
+            pricesAsOf: pricesAsOfNow(),
           },
         });
       }
@@ -245,6 +301,7 @@ async function handlePokemon(
       releaseDate,
       stats,
       catalogSource: "pokemontcg",
+      pricesAsOf: pricesAsOfNow(),
     },
   });
 }
@@ -293,6 +350,7 @@ async function handleOnePiece(
       priceBackend: fetchMeta.priceBackend,
       releaseDate: releaseDateParam,
       stats,
+      pricesAsOf: pricesAsOfNow(),
     },
   });
 }
@@ -397,18 +455,58 @@ export async function GET(request: Request, ctx: Params) {
     releaseDate: url.searchParams.get("releaseDate"),
   });
 
+  const refreshPrices =
+    url.searchParams.get("priceCache") === "refresh" &&
+    priceCacheRefreshAllowed();
+
   const cached = readCachedPayload(key);
-  if (cached && part === "catalog" && catalogIsFresh(cached.storedAt)) {
+  if (
+    cached &&
+    part === "catalog" &&
+    catalogIsFresh(cached.storedAt) &&
+    !refreshPrices
+  ) {
     return NextResponse.json(toCatalogBody(cached.body), {
       headers: cacheHeaders("catalog"),
     });
   }
-  if (cached && part !== "catalog" && pricesAreFresh(cached.storedAt)) {
-    const payload = part === "prices" ? toPricesBody(cached.body) : cached.body;
-    return NextResponse.json(payload, { headers: cacheHeaders(part) });
+
+  // Durable snapshot first so every instance shares one ~4h price copy.
+  // The 60s process cache is only the fallback when Blobs is unreachable.
+  if (!refreshPrices && part !== "catalog") {
+    const snap = await readFreshPriceSnapshot(category, setId);
+    if (snap && part === "prices") {
+      return NextResponse.json(pricePayloadFromSnapshot(snap, "hit"), {
+        headers: priceResponseHeaders("prices", "hit"),
+      });
+    }
+    if (snap && part === "full" && cached && catalogIsFresh(cached.storedAt)) {
+      return NextResponse.json(
+        withPriceCache(mergeFullBodyWithSnapshot(cached.body, snap), "hit"),
+        { headers: priceResponseHeaders("full", "hit") },
+      );
+    }
   }
 
-  const result = await loadSharedPayload(key, () => readCardsBody(request, ctx));
+  if (
+    !refreshPrices &&
+    cached &&
+    part !== "catalog" &&
+    pricesAreFresh(cached.storedAt)
+  ) {
+    const payload = part === "prices" ? toPricesBody(cached.body) : cached.body;
+    const served = part === "prices" ? "prices" : "full";
+    return NextResponse.json(withPriceCache(payload, "memory"), {
+      headers: priceResponseHeaders(served, "memory"),
+    });
+  }
+
+  const result = await loadSharedPayload(
+    key,
+    () => readCardsBody(request, ctx),
+    Date.now(),
+    { refreshPrices },
+  );
   if (!result.ok) {
     return NextResponse.json(
       result.body ?? { error: "Unexpected error loading cards." },
@@ -416,15 +514,19 @@ export async function GET(request: Request, ctx: Params) {
     );
   }
 
+  await rememberPriceSnapshot(category, setId, result.body, refreshPrices);
+
   if (part === "catalog") {
     return NextResponse.json(toCatalogBody(result.body), {
       headers: cacheHeaders("catalog"),
     });
   }
   if (part === "prices") {
-    return NextResponse.json(toPricesBody(result.body), {
-      headers: cacheHeaders("prices"),
+    return NextResponse.json(withPriceCache(toPricesBody(result.body), "miss"), {
+      headers: priceResponseHeaders("prices", "miss"),
     });
   }
-  return NextResponse.json(result.body, { headers: cacheHeaders("full") });
+  return NextResponse.json(withPriceCache(result.body, "miss"), {
+    headers: priceResponseHeaders("full", "miss"),
+  });
 }
