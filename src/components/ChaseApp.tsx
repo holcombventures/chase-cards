@@ -154,7 +154,8 @@ export function ChaseApp() {
         );
       } else if (result.paid) {
         setCheckoutBanner(
-          "Payment confirmed, but no matching price→entitlement mapping was found. Check Netlify STRIPE_PRICE_* env vars.",
+          result.error ||
+            "Payment confirmed, but no matching price→entitlement mapping was found. Check Netlify STRIPE_PRICE_* env vars.",
         );
       } else {
         setCheckoutBanner(

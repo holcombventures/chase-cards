@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
-import { entitlementsFromCheckoutSession } from "@/lib/stripe/entitlements-from-session";
+import { grantFromCheckoutSession } from "@/lib/stripe/entitlements-from-session";
 
 export const runtime = "nodejs";
 
@@ -48,13 +48,24 @@ export async function POST(req: Request) {
     );
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const entitlements = entitlementsFromCheckoutSession(session);
+      const eventSession = event.data.object;
+      let session = eventSession;
+      if (eventSession.id) {
+        try {
+          session = await stripe.checkout.sessions.retrieve(eventSession.id, {
+            expand: ["line_items.data.price"],
+          });
+        } catch (loadErr) {
+          console.error("[stripe/webhook] line item load failed", loadErr);
+        }
+      }
+      const grant = grantFromCheckoutSession(session);
       console.info("[stripe/webhook] checkout.session.completed", {
         sessionId: session.id,
         payment_status: session.payment_status,
         entitlementMeta: session.metadata?.entitlement ?? null,
-        entitlements,
+        entitlements: grant.entitlements,
+        grantError: grant.ok ? null : grant.error,
       });
     } else {
       console.info("[stripe/webhook] ack", { type: event.type, id: event.id });
