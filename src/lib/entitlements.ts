@@ -3,13 +3,13 @@
  *
  * Model:
  * - FREE: top 3 chase visible for EVERY live category (Pokémon AND One Piece).
- * - Premium $4.99 — buyer CHOOSES which single live category gets full unlock
+ * - Premium $2.99 — buyer CHOOSES which single live category gets full unlock
  *   (premiumCategory). Other live categories stay top-3-only until add-on / All Access.
- * - Category add-on $2.99 — unlock full access on a live category they did NOT
+ * - Category add-on $1.99 — unlock full access on a live category they did NOT
  *   pick for Premium (including Pokémon when Premium chose One Piece).
  *   Coming-soon add-ons (mtg / sports) still reserve entitlement.
- * - Per-sport add-ons — baseball | basketball | football | hockey | soccer
- * - All Access $29.99 — unlocks all categories (no picker needed)
+ * - Per-sport add-ons — baseball | basketball | football | hockey | soccer ($1.99)
+ * - All Access $9.99 — unlocks all categories (no picker needed)
  *
  * Migration: stored premium without premiumCategory → premiumCategory "pokemon"
  * (grandfather old “Premium = Pokémon” buyers). Legacy chase-cards-premium → same.
@@ -33,9 +33,11 @@ import {
 export const LEGACY_PREMIUM_STORAGE_KEY = "chase-cards-premium";
 export const ENTITLEMENTS_STORAGE_KEY = "chase-cards-entitlements";
 
-export const PREMIUM_PRICE_LABEL = "$4.99";
-export const ADDON_PRICE_LABEL = "$2.99";
-export const ALL_ACCESS_PRICE_LABEL = "$29.99";
+export {
+  PREMIUM_PRICE_LABEL,
+  ADDON_PRICE_LABEL,
+  ALL_ACCESS_PRICE_LABEL,
+} from "@/lib/planPrices";
 export const FREE_CHASE_LIMIT = 3;
 
 /** Categories that may appear in entitlements.categories (add-ons), including Pokémon. */

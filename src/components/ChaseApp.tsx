@@ -1169,8 +1169,9 @@ export function ChaseApp() {
           <>
             {" "}
             · Free: top {FREE_CHASE_LIMIT} chase on every live catalog ·
-            Premium {PREMIUM_PRICE_LABEL} (choose one category) · Add-ons $2.99
-            · All Access $29.99 · Stripe when configured.
+            Premium {PREMIUM_PRICE_LABEL} (choose one category) · Add-ons{" "}
+            {ADDON_PRICE_LABEL} · All Access {ALL_ACCESS_PRICE_LABEL} · Stripe
+            when configured.
           </>
         ) : null}
       </footer>
@@ -1308,11 +1309,11 @@ function ComingSoonCategoryPanel({
         You can select this category now. Unlock the{" "}
         <strong className="text-amber-200">{cat.shortLabel} add-on</strong> (
         {cat.priceLabel}) or <strong className="text-violet-200">All Access</strong>{" "}
-        ($29.99) via the shop to reserve entitlement for when the catalog goes
-        live.
+        ({ALL_ACCESS_PRICE_LABEL}) via the shop to reserve entitlement for when
+        the catalog goes live.
         {hasPremium
           ? " Premium already unlocked one live category; add-ons cover the rest."
-          : " Premium ($4.99) lets you choose one live category for full depth today."}
+          : ` Premium (${PREMIUM_PRICE_LABEL}) lets you choose one live category for full depth today.`}
       </p>
       {!hasPremium ? (
         <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">

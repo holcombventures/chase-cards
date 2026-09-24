@@ -30,17 +30,17 @@ Set these in **Netlify → Site settings → Environment variables** (and option
 |---|---|---|
 | `STRIPE_SECRET_KEY` | Yes (for live pay) | Secret key (`sk_test_…` / `sk_live_…`) |
 | `STRIPE_WEBHOOK_SECRET` | Optional until webhook | Signing secret (`whsec_…`) for `/api/stripe/webhook` |
-| `STRIPE_PRICE_PREMIUM` | For Premium Checkout | Stripe Price ID (`price_…`) |
-| `STRIPE_PRICE_ALL_ACCESS` | For All Access | Stripe Price ID |
-| `STRIPE_PRICE_POKEMON` | For Pokémon add-on | Stripe Price ID (NEW — needed when Premium chose One Piece) |
-| `STRIPE_PRICE_ONE_PIECE` | For One Piece add-on | Stripe Price ID |
-| `STRIPE_PRICE_MTG` | For MTG add-on | Stripe Price ID |
-| `STRIPE_PRICE_SPORTS` | Optional alias | Single generic Sports product Price ID |
-| `STRIPE_PRICE_SPORTS_BASEBALL` | Per-sport | Baseball add-on Price ID |
-| `STRIPE_PRICE_SPORTS_BASKETBALL` | Per-sport | Basketball |
-| `STRIPE_PRICE_SPORTS_FOOTBALL` | Per-sport | Football |
-| `STRIPE_PRICE_SPORTS_HOCKEY` | Per-sport | Hockey |
-| `STRIPE_PRICE_SPORTS_SOCCER` | Per-sport | Soccer |
+| `STRIPE_PRICE_PREMIUM` | For Premium Checkout | One-time Price ID (`price_…`) at **$2.99** |
+| `STRIPE_PRICE_ALL_ACCESS` | For All Access | One-time Price ID at **$9.99** |
+| `STRIPE_PRICE_POKEMON` | For Pokémon add-on | One-time Price ID at **$1.99** (needed when Premium chose One Piece) |
+| `STRIPE_PRICE_ONE_PIECE` | For One Piece add-on | One-time Price ID at **$1.99** |
+| `STRIPE_PRICE_MTG` | For MTG add-on | One-time Price ID at **$1.99** |
+| `STRIPE_PRICE_SPORTS` | Optional alias | Single generic Sports product, one-time **$1.99** |
+| `STRIPE_PRICE_SPORTS_BASEBALL` | Per-sport | Baseball add-on, one-time **$1.99** |
+| `STRIPE_PRICE_SPORTS_BASKETBALL` | Per-sport | Basketball, one-time **$1.99** |
+| `STRIPE_PRICE_SPORTS_FOOTBALL` | Per-sport | Football, one-time **$1.99** |
+| `STRIPE_PRICE_SPORTS_HOCKEY` | Per-sport | Hockey, one-time **$1.99** |
+| `STRIPE_PRICE_SPORTS_SOCCER` | Per-sport | Soccer, one-time **$1.99** |
 | `NEXT_PUBLIC_SITE_URL` | Recommended on Netlify | Canonical origin for success/cancel URLs (e.g. `https://chasecards.online`). Falls back to Netlify `URL` / request Host. |
 
 ## Netlify checklist (Bobby)
@@ -68,6 +68,7 @@ Without keys, buttons still **demo unlock** so Pokémon freemium keeps working o
 - Generic **Sports** category stays `coming_soon` until Phase sports adapters. Purchasing `sports-*` sets `entitlements.sports[]` for future use; any sport (or `sports` add-on) also marks the Sports chip as entitled.
 - **Premium choose-one model**: one `STRIPE_PRICE_PREMIUM` Price ID; category choice is session **metadata** (`premium_category`), not a separate Price. No conflict with existing Premium Price ID.
 - **Pokémon add-on gap**: there is no `STRIPE_PRICE_POKEMON` until you create one in Stripe Dashboard and set it in Netlify. Until then, Pokémon add-on checkout returns `demoFallback` (same as other missing add-on prices).
-- Free: top-3 chase on every live category. Premium: full depth on the chosen live category only. Add-on ($2.99): full depth on another live category. All Access: all categories.
+- Free: top-3 chase on every live category. Premium ($2.99): full depth on the chosen live category only. Add-on ($1.99): full depth on another live category (Pokémon, One Piece, MTG, Sports, and each per-sport Price). All Access ($9.99): all categories.
+- Display copy uses `src/lib/planPrices.ts`. Checkout does not fetch Stripe Price amounts; it charges whatever one-time Price ID is currently in the matching env var. Until those vars point at the new Prices, the shop can show $2.99 / $1.99 / $9.99 while Checkout still charges the old Price.
 - Legacy buyers with `premium: true` and no `premiumCategory` migrate to `premiumCategory: "pokemon"`.
 - Webhook is best-effort logging until accounts exist; do not rely on it alone for grants.
