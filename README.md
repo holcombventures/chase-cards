@@ -17,9 +17,9 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
   - **Every metric (including N/A) shows a visible source line** under the value
 - **Entitlements (demo localStorage)**:
   - **Free**: top **3** chase on every **live** catalog (Pokémon today)
-  - **Premium $4.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
-  - **Category add-on $2.99** (`pokemon`, `one-piece`, `mtg`, `sports`): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece); MTG/Sports still reserve coming-soon
-  - **All Access $29.99**: unlocks all categories (Stripe or demo)
+  - **Premium $2.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
+  - **Category add-on $1.99** (`pokemon`, `one-piece`, `mtg`, `sports`, and per-sport): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece); MTG/Sports still reserve coming-soon
+  - **All Access $9.99**: unlocks all categories (Stripe or demo)
   - Coming-soon categories: entitled → “catalog coming soon”; otherwise paywall CTAs.
   - Legacy `chase-cards-premium` / premium-without-category migrates to Premium + `premiumCategory: "pokemon"`
   - Shop panel + **Restore free / clear entitlements** for testing
@@ -131,7 +131,7 @@ src/
     EntitlementShop.tsx            # Premium / add-ons / sports / All Access (Stripe + demo)
     SetStatsPanel.tsx              # Total / MoM with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
-    PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
+    PremiumGate.tsx                # Unlock Premium $2.99 CTA / paywall
     SetSelector.tsx
     ViewToggle.tsx
     StatusPanel.tsx

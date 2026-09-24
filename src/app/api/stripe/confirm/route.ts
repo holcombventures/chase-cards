@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isCategoryId, isLiveCategory } from "@/lib/catalog/types";
 import { getStripe } from "@/lib/stripe/client";
 import { isStripeConfigured } from "@/lib/stripe/catalog";
-import { entitlementsFromCheckoutSession } from "@/lib/stripe/entitlements-from-session";
+import { grantFromCheckoutSession } from "@/lib/stripe/entitlements-from-session";
 
 export const runtime = "nodejs";
 
@@ -53,7 +53,20 @@ export async function GET(req: Request) {
       lineItems = listed.data;
     }
 
-    const entitlements = entitlementsFromCheckoutSession(session, lineItems);
+    const grant = grantFromCheckoutSession(session, lineItems);
+    if (!grant.ok) {
+      return NextResponse.json(
+        {
+          paid: true,
+          payment_status: session.payment_status,
+          entitlements: [] as string[],
+          premiumCategory: null,
+          sessionId: session.id,
+          error: grant.error,
+        },
+        { status: 422 },
+      );
+    }
 
     const rawCat = session.metadata?.premium_category?.trim();
     const premiumCategory =
@@ -62,7 +75,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       paid: true,
       payment_status: session.payment_status,
-      entitlements,
+      entitlements: grant.entitlements,
       premiumCategory,
       sessionId: session.id,
       metadata: session.metadata ?? {},
