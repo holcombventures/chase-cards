@@ -19,6 +19,8 @@ import {
 import * as pokemonCatalog from "@/lib/catalog/pokemon";
 import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
+import * as mtgCatalog from "@/lib/catalog/mtg";
+import { MtgApiError } from "@/lib/catalog/mtg";
 import { priceCacheRefreshAllowed } from "@/lib/priceSnapshot";
 import { readFreshPriceSnapshot } from "@/lib/priceSnapshotStore";
 
@@ -120,6 +122,39 @@ export async function GET(request: Request, { params }: Params) {
         releaseDate: releaseDateParam,
         momUnavailableReason:
           "One Piece catalog has no Cardmarket-style ~30-day history",
+      });
+      return NextResponse.json({
+        data: stats,
+        meta: {
+          category,
+          setId,
+          total: cards.length,
+          pricedCount,
+          priceSource,
+          releaseDate: releaseDateParam,
+        },
+      });
+    }
+
+    if (category === "mtg") {
+      const { cards: raw, meta: fetchMeta } = await mtgCatalog.fetchCards(setId);
+      const backend: PriceSource = fetchMeta.priceBackend;
+      const cards: CardWithPrice[] = raw.map((card) => {
+        const enriched = enrichCard(card);
+        return {
+          ...enriched,
+          priceSource: enriched.marketPrice !== null ? backend : null,
+        };
+      });
+      const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
+      const priceSource: CardsMetaPriceSource =
+        pricedCount > 0 ? backend : "none";
+      const stats = buildSetStats({
+        cards,
+        priceSource,
+        releaseDate: releaseDateParam,
+        momUnavailableReason:
+          "Scryfall catalog has no Cardmarket-style ~30-day history",
       });
       return NextResponse.json({
         data: stats,
@@ -278,6 +313,15 @@ export async function GET(request: Request, { params }: Params) {
       return NextResponse.json(
         { error: err.message },
         { status: err.status === 429 ? 429 : 502 },
+      );
+    }
+    if (err instanceof MtgApiError) {
+      return NextResponse.json(
+        { error: err.message },
+        {
+          status:
+            err.status === 429 ? 429 : err.status === 404 ? 404 : err.status === 400 ? 400 : 502,
+        },
       );
     }
     if (err instanceof CatalogNotLiveError) {

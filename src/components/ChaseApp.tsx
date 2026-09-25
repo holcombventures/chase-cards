@@ -192,11 +192,29 @@ export function ChaseApp() {
     [unlockPremium],
   );
 
+  const buyAddonFor = useCallback(
+    async (addonCategoryId: CategoryId) => {
+      setCheckoutBusy(true);
+      try {
+        await purchaseEntitlement(addonCategoryId, {
+          onDemoFallback: () => unlockAddon(addonCategoryId),
+          onStatus: (msg) => {
+            if (msg && msg !== "Starting checkout…") setCheckoutBanner(msg);
+          },
+        });
+      } finally {
+        setCheckoutBusy(false);
+      }
+    },
+    [unlockAddon],
+  );
+
   const [categoryId, setCategoryId] = useState<CategoryId>(DEFAULT_CATEGORY_ID);
   const category = getCategory(categoryId);
   const catalogLive = isLiveCategory(categoryId);
   const isPokemon = categoryId === "pokemon";
   const isOnePiece = categoryId === "one-piece";
+  const isMtg = categoryId === "mtg";
   const fullAccessHere = hasFullAccessInCategory(categoryId);
   const categoryHint = categoryEntitlementHint(entitlements, categoryId);
   const ownsThis = ownsCategory(categoryId);
@@ -647,8 +665,22 @@ export function ChaseApp() {
     hasPricedCards &&
     (priceSource === "optcg" || priceSource === "optcgapi");
 
+  const showMtgPriceNote =
+    isMtg && hasPricedCards && priceSource === "scryfall";
+
   const unlockActions: GateAction[] = useMemo(() => {
     const actions: GateAction[] = [];
+    const addonLabel = `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`;
+    const addonAction: GateAction = {
+      label: addonLabel,
+      onClick: () => unlockAddon(categoryId),
+      accent: "sky",
+      checkoutKey: categoryId as "pokemon" | "one-piece" | "mtg" | "sports",
+    };
+    // MTG is the $1.99 add-on (STRIPE_PRICE_MTG), including for free visitors.
+    if (isMtg && !fullAccessHere) {
+      actions.push(addonAction);
+    }
     if (!isPremium) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
@@ -657,18 +689,9 @@ export function ChaseApp() {
         checkoutKey: "premium",
         needsPremiumPicker: true,
       });
-    } else if (!fullAccessHere) {
+    } else if (!fullAccessHere && !isMtg) {
       // Premium owned but this live category still top-3 → offer add-on
-      actions.push({
-        label: `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`,
-        onClick: () => unlockAddon(categoryId),
-        accent: "sky",
-        checkoutKey: categoryId as
-          | "pokemon"
-          | "one-piece"
-          | "mtg"
-          | "sports",
-      });
+      actions.push(addonAction);
     }
     if (!entitlements.allAccess) {
       actions.push({
@@ -689,6 +712,7 @@ export function ChaseApp() {
     }
     return actions;
   }, [
+    isMtg,
     isPremium,
     fullAccessHere,
     category.shortLabel,
@@ -701,6 +725,9 @@ export function ChaseApp() {
   ]);
 
   const unlockMessage = (() => {
+    if (isMtg && !fullAccessHere) {
+      return `Free shows top ${FREE_CHASE_LIMIT} chase. Unlock the MTG add-on (${category.priceLabel ?? ADDON_PRICE_LABEL}) for full chase + entire set.`;
+    }
     if (!isPremium) {
       return `Free shows top ${FREE_CHASE_LIMIT} chase on every live catalog. Unlock Premium (${PREMIUM_PRICE_LABEL}) and choose one category for full chase + entire set. Other live categories stay top 3 until an add-on (${ADDON_PRICE_LABEL}) or All Access (${ALL_ACCESS_PRICE_LABEL}).`;
     }
@@ -1049,6 +1076,11 @@ export function ChaseApp() {
                         : "Prices via optcgapi.com (market_price USD) · OPTCG key optional for primary host"}
                     </p>
                   ) : null}
+                  {showMtgPriceNote ? (
+                    <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100/90">
+                      Prices via Scryfall (USD) when provided
+                    </p>
+                  ) : null}
                   {mode === "chase" && chaseMode === "estimated" && chaseNote ? (
                     <p className="rounded-lg border border-sky-400/25 bg-sky-400/5 px-3 py-2 text-xs text-sky-100/90">
                       {chaseNote}
@@ -1083,9 +1115,17 @@ export function ChaseApp() {
                     <ChaseUpgradeBar
                       busy={checkoutBusy}
                       picking={pickingPremiumHeader}
+                      priceLabel={
+                        isMtg
+                          ? (category.priceLabel ?? ADDON_PRICE_LABEL)
+                          : PREMIUM_PRICE_LABEL
+                      }
                       onStartPick={() => setPickingPremiumHeader(true)}
                       onCancelPick={() => setPickingPremiumHeader(false)}
                       onBuyFor={(id) => void buyPremiumFor(id)}
+                      onUnlockAddon={
+                        isMtg ? () => void buyAddonFor("mtg") : undefined
+                      }
                     />
                   ) : null}
 
@@ -1164,8 +1204,17 @@ export function ChaseApp() {
         >
           optcgapi.com
         </a>
-        . Market prices never invented. Not affiliated with Bandai, Nintendo, or
-        TPC.
+        . Magic: The Gathering English data via{" "}
+        <a
+          className="text-amber-300/80 underline-offset-2 hover:underline"
+          href="https://scryfall.com"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Scryfall
+        </a>
+        . Market prices never invented. Not affiliated with Bandai, Nintendo,
+        TPC, or Wizards of the Coast.
         {entitlementsReady ? (
           <>
             {" "}
@@ -1184,27 +1233,41 @@ export function ChaseApp() {
 function ChaseUpgradeBar({
   busy,
   picking,
+  priceLabel,
   onStartPick,
   onCancelPick,
   onBuyFor,
+  onUnlockAddon,
 }: {
   busy: boolean;
   picking: boolean;
+  priceLabel: string;
   onStartPick: () => void;
   onCancelPick: () => void;
   onBuyFor: (id: CategoryId) => void;
+  /** When set, this bar buys the category add-on instead of Premium. */
+  onUnlockAddon?: () => void;
 }) {
   return (
     <div
       className="flex flex-col gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4"
       role="region"
-      aria-label="Upgrade to Premium"
+      aria-label={onUnlockAddon ? "Unlock category add-on" : "Upgrade to Premium"}
     >
       <p className="text-sm font-medium text-amber-50">
         Unlock full chase + entire set —{" "}
-        <span className="font-bold text-amber-300">{PREMIUM_PRICE_LABEL}</span>
+        <span className="font-bold text-amber-300">{priceLabel}</span>
       </p>
-      {picking ? (
+      {onUnlockAddon ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onUnlockAddon}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950 shadow hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:opacity-60 sm:min-h-0"
+        >
+          Unlock
+        </button>
+      ) : picking ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {LIVE_CATALOG_IDS.map((id) => (
             <button

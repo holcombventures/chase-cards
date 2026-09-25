@@ -98,12 +98,20 @@ export function EntitlementShop({
         ? "Demo unlock · Stripe not configured"
         : "Pays with Stripe when configured · demo unlock otherwise";
 
-  /** Live add-ons only after Premium (choose-one used); coming-soon always reservable. */
+  /** Live add-ons only after Premium (choose-one used); coming-soon always reservable.
+   * MTG is the exception: the $1.99 add-on is the unlock, even before Premium.
+   */
   const addonIdsToShow: CategoryId[] = (() => {
     const ids: CategoryId[] = [];
+    if (
+      isLiveCategory("mtg") &&
+      !hasFullAccessInCategory(entitlements, "mtg")
+    ) {
+      ids.push("mtg");
+    }
     if (entitlements.premium || entitlements.allAccess) {
       for (const id of LIVE_CATALOG_IDS) {
-        if (!hasFullAccessInCategory(entitlements, id)) {
+        if (!hasFullAccessInCategory(entitlements, id) && !ids.includes(id)) {
           ids.push(id);
         }
       }

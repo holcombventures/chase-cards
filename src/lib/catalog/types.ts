@@ -1,7 +1,8 @@
 /**
  * Multi-category catalog config.
- * Pokémon and One Piece English are live (OP uses public optcgapi.com without a key).
- * MTG / Sports stay Coming Soon — no adapter yet.
+ * Pokémon, One Piece English, and Magic: The Gathering English are live
+ * (OP uses public optcgapi.com without a key; MTG uses public Scryfall).
+ * Sports stays coming_soon — no adapter.
  */
 
 import { ADDON_PRICE_LABEL } from "@/lib/planPrices";
@@ -15,7 +16,7 @@ export type CategoryConfig = {
   label: string;
   /** Short label for compact switcher chips */
   shortLabel: string;
-  /** Add-on price display (same $1.99 expansion-pack price for every category). */
+  /** Add-on price display (same expansion-pack price for every category). */
   priceLabel: string | null;
   status: CategoryStatus;
 };
@@ -25,7 +26,7 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     id: "pokemon",
     label: "Pokémon",
     shortLabel: "Pokémon",
-    /** Shown when Pokémon is offered as a $1.99 add-on (Premium chose another live cat). */
+    /** Shown when Pokémon is offered as an add-on (Premium chose another live cat). */
     priceLabel: ADDON_PRICE_LABEL,
     status: "live",
   },
@@ -42,7 +43,7 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     label: "Magic: The Gathering",
     shortLabel: "MTG",
     priceLabel: ADDON_PRICE_LABEL,
-    status: "coming_soon",
+    status: "live",
   },
   {
     id: "sports",

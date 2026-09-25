@@ -2,14 +2,15 @@
  * Entitlements (localStorage; Stripe Checkout grants via confirm).
  *
  * Model:
- * - FREE: top 3 chase visible for EVERY live category (Pokémon AND One Piece).
- * - Premium $2.99 — buyer CHOOSES which single live category gets full unlock
+ * - FREE: top 3 chase visible for EVERY live category (Pokémon, One Piece, and MTG).
+ * - Premium (PREMIUM_PRICE_LABEL) — buyer CHOOSES which single live category gets full unlock
  *   (premiumCategory). Other live categories stay top-3-only until add-on / All Access.
- * - Category add-on $1.99 — unlock full access on a live category they did NOT
+ * - Category add-on (ADDON_PRICE_LABEL) — unlock full access on a live category they did NOT
  *   pick for Premium (including Pokémon when Premium chose One Piece).
- *   Coming-soon add-ons (mtg / sports) still reserve entitlement.
- * - Per-sport add-ons — baseball | basketball | football | hockey | soccer ($1.99)
- * - All Access $9.99 — unlocks all categories (no picker needed)
+ *   MTG is sold on this add-on (STRIPE_PRICE_MTG) and unlocks that catalog on its own.
+ *   Coming-soon add-ons (sports) still reserve entitlement.
+ * - Per-sport add-ons — baseball | basketball | football | hockey | soccer (ADDON_PRICE_LABEL)
+ * - All Access (ALL_ACCESS_PRICE_LABEL) — unlocks all categories (no picker needed)
  *
  * Migration: stored premium without premiumCategory → premiumCategory "pokemon"
  * (grandfather old “Premium = Pokémon” buyers). Legacy chase-cards-premium → same.
@@ -269,6 +270,7 @@ export function ownsSport(
 /**
  * Full chase + entire set for a live category.
  * - allAccess → true
+ * - MTG add-on (STRIPE_PRICE_MTG) → true without Premium
  * - else if premium && (premiumCategory === id || categories.includes(id)) → true
  * - else false (free top-3 only)
  */
@@ -278,6 +280,7 @@ export function hasFullAccessInCategory(
 ): boolean {
   if (!isLiveCategory(categoryId)) return false;
   if (state.allAccess) return true;
+  if (categoryId === "mtg" && state.categories.includes("mtg")) return true;
   if (
     state.premium &&
     (state.premiumCategory === categoryId ||

@@ -10,6 +10,8 @@ import {
 import * as pokemonCatalog from "@/lib/catalog/pokemon";
 import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
+import * as mtgCatalog from "@/lib/catalog/mtg";
+import { MtgApiError } from "@/lib/catalog/mtg";
 
 function parseCategory(request: Request): CategoryId {
   const url = new URL(request.url);
@@ -48,7 +50,9 @@ export async function GET(request: Request) {
     const sets =
       adapterId === "one-piece"
         ? await onePieceCatalog.fetchSets()
-        : await pokemonCatalog.fetchSets();
+        : adapterId === "mtg"
+          ? await mtgCatalog.fetchSets()
+          : await pokemonCatalog.fetchSets();
     return NextResponse.json({
       data: sets,
       meta: { category: adapterId },
@@ -64,6 +68,15 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { error: err.message },
         { status: err.status === 429 ? 429 : 502 },
+      );
+    }
+    if (err instanceof MtgApiError) {
+      return NextResponse.json(
+        { error: err.message },
+        {
+          status:
+            err.status === 429 ? 429 : err.status === 404 ? 404 : err.status === 400 ? 400 : 502,
+        },
       );
     }
     if (err instanceof CatalogNotLiveError) {

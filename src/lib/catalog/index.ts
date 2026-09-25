@@ -6,8 +6,9 @@ import type { CategoryId } from "./types";
 import { isLiveCategory } from "./types";
 import * as pokemon from "./pokemon";
 import * as onePiece from "./one-piece";
+import * as mtg from "./mtg";
 
-export type CatalogAdapterId = "pokemon" | "one-piece";
+export type CatalogAdapterId = "pokemon" | "one-piece" | "mtg";
 
 /** Adapter exists but category status is still coming_soon. Not an upstream failure. */
 export class CatalogNotLiveError extends Error {
@@ -19,7 +20,7 @@ export class CatalogNotLiveError extends Error {
 }
 
 export function hasCatalogAdapter(id: CategoryId): id is CatalogAdapterId {
-  return id === "pokemon" || id === "one-piece";
+  return id === "pokemon" || id === "one-piece" || id === "mtg";
 }
 
 export function assertLiveCatalog(id: CategoryId): CatalogAdapterId {
@@ -32,6 +33,7 @@ export function assertLiveCatalog(id: CategoryId): CatalogAdapterId {
 export const adapters = {
   pokemon,
   "one-piece": onePiece,
+  mtg,
 } as const;
 
 export function getCatalogAdapter(id: CatalogAdapterId) {
