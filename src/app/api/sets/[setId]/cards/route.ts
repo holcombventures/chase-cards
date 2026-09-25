@@ -36,6 +36,8 @@ import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
+import * as lorcanaCatalog from "@/lib/catalog/lorcana";
+import { LorcanaApiError } from "@/lib/catalog/lorcana";
 import {
   mergeFullBodyWithSnapshot,
   priceCacheRefreshAllowed,
@@ -357,6 +359,50 @@ async function handleOnePiece(
   });
 }
 
+async function handleLorcana(setId: string, releaseDateParam: string | null) {
+  const { cards: raw, meta: fetchMeta } = await lorcanaCatalog.fetchCards(setId);
+  const backend: PriceSource = fetchMeta.priceBackend;
+
+  const cards: CardWithPrice[] = normalizeCardsSetTotals(
+    raw.map((card) => {
+      const enriched = enrichCard(card);
+      return {
+        ...enriched,
+        priceSource: enriched.marketPrice !== null ? backend : null,
+      };
+    }),
+  );
+
+  const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
+  const priceSource: CardsMetaPriceSource = pricedCount > 0 ? backend : "none";
+
+  const stats = buildSetStats({
+    cards,
+    priceSource,
+    releaseDate: releaseDateParam,
+    tcgdexBundle: null,
+    tcgdexAttempted: false,
+    momUnavailableReason:
+      "Lorcana catalog has no price-history archive",
+  });
+
+  return NextResponse.json({
+    data: cards,
+    meta: {
+      category: "lorcana",
+      total: cards.length,
+      pricedCount,
+      missingPriceCount: cards.length - pricedCount,
+      priceSource,
+      fallbackUsed: false,
+      priceBackend: fetchMeta.priceBackend,
+      releaseDate: releaseDateParam,
+      stats,
+      pricesAsOf: pricesAsOfNow(),
+    },
+  });
+}
+
 async function handleMtg(setId: string, releaseDateParam: string | null) {
   const { cards: raw, meta: fetchMeta } = await mtgCatalog.fetchCards(setId);
   const backend: PriceSource = fetchMeta.priceBackend;
@@ -429,6 +475,9 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
     if (category === "mtg") {
       return await handleMtg(setId, releaseDateParam);
     }
+    if (category === "lorcana") {
+      return await handleLorcana(setId, releaseDateParam);
+    }
     return await handlePokemon(setId, releaseDateParam, setNameParam);
   } catch (err) {
     if (err instanceof PokemonTcgApiError) {
@@ -443,7 +492,7 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError) {
+    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
       return NextResponse.json(
         { error: err.message },
         {

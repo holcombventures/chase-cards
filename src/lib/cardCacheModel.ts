@@ -190,6 +190,7 @@ const PRICE_SOURCES = new Set<PriceSource>([
   "tcgdex",
   "optcg",
   "optcgapi",
+  "tcgcsv",
 ]);
 
 /** Card identity the grid can render. Price patches do not qualify. */

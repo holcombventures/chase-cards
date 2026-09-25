@@ -21,6 +21,8 @@ import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
+import * as lorcanaCatalog from "@/lib/catalog/lorcana";
+import { LorcanaApiError } from "@/lib/catalog/lorcana";
 import { priceCacheRefreshAllowed } from "@/lib/priceSnapshot";
 import { readFreshPriceSnapshot } from "@/lib/priceSnapshotStore";
 
@@ -122,6 +124,39 @@ export async function GET(request: Request, { params }: Params) {
         releaseDate: releaseDateParam,
         momUnavailableReason:
           "One Piece catalog has no Cardmarket-style ~30-day history",
+      });
+      return NextResponse.json({
+        data: stats,
+        meta: {
+          category,
+          setId,
+          total: cards.length,
+          pricedCount,
+          priceSource,
+          releaseDate: releaseDateParam,
+        },
+      });
+    }
+
+    if (category === "lorcana") {
+      const { cards: raw, meta: fetchMeta } = await lorcanaCatalog.fetchCards(setId);
+      const backend: PriceSource = fetchMeta.priceBackend;
+      const cards: CardWithPrice[] = raw.map((card) => {
+        const enriched = enrichCard(card);
+        return {
+          ...enriched,
+          priceSource: enriched.marketPrice !== null ? backend : null,
+        };
+      });
+      const pricedCount = cards.filter((c) => c.marketPrice !== null).length;
+      const priceSource: CardsMetaPriceSource =
+        pricedCount > 0 ? backend : "none";
+      const stats = buildSetStats({
+        cards,
+        priceSource,
+        releaseDate: releaseDateParam,
+        momUnavailableReason:
+          "Lorcana catalog has no price-history archive",
       });
       return NextResponse.json({
         data: stats,
@@ -315,7 +350,7 @@ export async function GET(request: Request, { params }: Params) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError) {
+    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
       return NextResponse.json(
         { error: err.message },
         {

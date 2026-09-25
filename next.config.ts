@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
         hostname: "optcgapi.com",
         pathname: "/media/**",
       },
+      {
+        protocol: "https",
+        hostname: "tcgplayer-cdn.tcgplayer.com",
+        pathname: "/**",
+      },
     ],
   },
 };

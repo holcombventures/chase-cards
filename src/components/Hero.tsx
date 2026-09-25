@@ -11,7 +11,7 @@ import {
   type EntitlementsState,
 } from "@/lib/entitlements";
 import {
-  LIVE_CATALOG_IDS,
+  PAID_LIVE_CATALOG_IDS,
   getCategory,
   type CategoryId,
 } from "@/lib/catalog/types";
@@ -203,7 +203,7 @@ export function Hero({
             ) : pickingPremium ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="sr-only">Choose one live category for Premium</span>
-                {LIVE_CATALOG_IDS.map((id) => (
+                {PAID_LIVE_CATALOG_IDS.map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -266,7 +266,7 @@ export function Hero({
             {entitlementsReady && !badge ? (
               pickingPremium ? (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {LIVE_CATALOG_IDS.map((id) => (
+                  {PAID_LIVE_CATALOG_IDS.map((id) => (
                     <button
                       key={`cta-${id}`}
                       type="button"
