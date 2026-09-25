@@ -2,11 +2,11 @@
 
 A Next.js prototype for browsing TCG sets and highlighting **chase cards** — the most valuable cards by live market price.
 
-**Phase 2B:** **Pokémon** is live. **One Piece English**, MTG, and Sports are Coming Soon (OP adapter kept behind the category flag). Entitlements via localStorage; **Stripe Checkout** when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
+**Phase 2B:** **Pokémon**, **One Piece English**, and **Magic: The Gathering English** are live. **Sports** is Coming Soon. Entitlements via localStorage; **Stripe Checkout** when env Price IDs are set (demo unlock fallback otherwise). See [STRIPE.md](./STRIPE.md).
 
 ## Features
 
-- **Category switcher** — Pokémon (live); One Piece / MTG / Sports (Coming Soon)
+- **Category switcher** — Pokémon, One Piece, and MTG (live); Sports (Coming Soon)
 - Pick any Pokémon TCG set from the official API set list
 - Toggle between:
   1. **Chase cards** — top **20%** of cards in the set by market value (among cards with a usable market price; count is **rounded up**, minimum **1** if at least one priced card exists)
@@ -16,10 +16,10 @@ A Next.js prototype for browsing TCG sets and highlighting **chase cards** — t
   2. **Month-over-month (MoM)** — percent change vs ~30-day Cardmarket averages via TCGdex (`avg`/`trend` vs `avg30`), or **N/A** with reason when data/age is insufficient
   - **Every metric (including N/A) shows a visible source line** under the value
 - **Entitlements (demo localStorage)**:
-  - **Free**: top **3** chase on every **live** catalog (Pokémon today)
-  - **Premium $4.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
-  - **Category add-on $2.99** (`pokemon`, `one-piece`, `mtg`, `sports`): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece); MTG/Sports still reserve coming-soon
-  - **All Access $29.99**: unlocks all categories (Stripe or demo)
+  - **Free**: top **3** chase on every **live** catalog (Pokémon, One Piece English, and MTG)
+  - **Premium $2.99**: buyer **chooses one** live category for full chase + entire set; other live categories stay top-3 until add-on / All Access
+  - **Category add-on $1.99** (`pokemon`, `one-piece`, `mtg`, `sports`, and per-sport): unlock full depth on a live category not chosen for Premium (Pokémon add-on when Premium picked One Piece). MTG checkout uses this add-on (`STRIPE_PRICE_MTG`) and unlocks that catalog on its own. Sports still reserves coming-soon
+  - **All Access $9.99**: unlocks all categories (Stripe or demo)
   - Coming-soon categories: entitled → “catalog coming soon”; otherwise paywall CTAs.
   - Legacy `chase-cards-premium` / premium-without-category migrates to Premium + `premiumCategory: "pokemon"`
   - Shop panel + **Restore free / clear entitlements** for testing
@@ -67,7 +67,7 @@ This app is **not** affiliated with Nintendo, The Pokémon Company, TCGPlayer, o
 
 **One Piece English (Phase 2B):** adapter in `src/lib/catalog/one-piece.ts`. Prefers OPTCG API when `OPTCG_API_KEY` is set; otherwise falls back to public [optcgapi.com](https://optcgapi.com) (`/api/allSets/`, `/api/sets/{id}/`). Images prefer `OPTCG /images/{card_id}` (public). MoM is N/A (no Cardmarket-style history).
 
-**Magic: The Gathering English:** adapter in `src/lib/catalog/mtg.ts` via public [Scryfall](https://api.scryfall.com) (keyless — no API key). English paper sets, `lang:en` cards, Scryfall image URLs, and USD prices only when Scryfall provides `usd` / `usd_foil` / `usd_etched`. This branch sets category status to **`live`** so deploy previews serve `/api/sets?category=mtg`. Do not merge that flip to main until COO approves go-live. Sports adapter is not built.
+**Magic: The Gathering English:** adapter in `src/lib/catalog/mtg.ts` via public [Scryfall](https://api.scryfall.com) (keyless — no API key). English paper sets, `lang:en` cards, Scryfall image URLs, and USD prices only when Scryfall provides `usd` / `usd_foil` / `usd_etched`. Category status is **`live`**. Checkout uses the shared add-on Price (`STRIPE_PRICE_MTG`). Sports adapter is not built.
 
 ## Stack
 
@@ -94,7 +94,7 @@ cp .env.example .env.local
 |---|---|---|
 | `POKEMONTCG_API_KEY` | No | API key from [dev.pokemontcg.io](https://dev.pokemontcg.io). Without it, public access is used and rate limits are stricter. If you hit HTTP 429, add a key and restart. |
 | `OPTCG_API_KEY` | No | `X-API-Key` for [OPTCG API](https://optcg-api.arjunbansal-ai.workers.dev). Without it, One Piece uses optcgapi.com fallback (sets/cards + prices). |
-| Scryfall | n/a | MTG English catalog uses the public Scryfall API. Keyless — no env var. This branch marks the category `live` for preview only. |
+| Scryfall | n/a | MTG English catalog uses the public Scryfall API. Keyless — no env var. Category status is `live`. |
 | `STRIPE_SECRET_KEY` / `STRIPE_PRICE_*` | No (demo fallback) | See [STRIPE.md](./STRIPE.md) for full Stripe Checkout env list and Netlify checklist. |
 
 ## Run
@@ -134,7 +134,7 @@ src/
     EntitlementShop.tsx            # Premium / add-ons / sports / All Access (Stripe + demo)
     SetStatsPanel.tsx              # Total / MoM with source lines
     CardTile.tsx                   # Optional locked/blur teaser state
-    PremiumGate.tsx                # Unlock Premium $4.99 CTA / paywall
+    PremiumGate.tsx                # Unlock Premium $2.99 CTA / paywall
     SetSelector.tsx
     ViewToggle.tsx
     StatusPanel.tsx
@@ -156,8 +156,8 @@ src/
 
 1. Open the site — category chips at the top of the controls.
 2. **Pokémon (Live)** — top 3 chase free; Premium (choose Pokémon) or Pokémon add-on / All Access for full depth.
-3. **One Piece English (Coming Soon)** — adapter present behind flag; not selectable as live until shipped.
-4. **MTG / Sports** — coming soon; entitled → “catalog coming soon”; otherwise paywall CTAs.
+3. **One Piece English (Live)** — top 3 chase free; Premium (choose One Piece) or the One Piece add-on / All Access for full depth.
+4. **MTG (Live)** — top 3 chase free; unlock the rest with the $1.99 MTG add-on (`STRIPE_PRICE_MTG`). **Sports** — coming soon; entitled → “catalog coming soon”; otherwise paywall CTAs.
 5. Use **Restore free / clear entitlements** (shop or header) to reset. Legacy Premium unlocks still migrate automatically.
 
 ## Stripe Checkout

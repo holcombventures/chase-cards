@@ -1,10 +1,11 @@
 /**
  * Multi-category catalog config.
- * Pokémon and One Piece English are live (OP uses public optcgapi.com without a key).
- * MTG English is live on this branch so deploy previews can load sets, cards, and prices.
- * Do not merge that status to main until COO approves go-live.
+ * Pokémon, One Piece English, and Magic: The Gathering English are live
+ * (OP uses public optcgapi.com without a key; MTG uses public Scryfall).
  * Sports stays coming_soon — no adapter.
  */
+
+import { ADDON_PRICE_LABEL } from "@/lib/planPrices";
 
 export type CategoryId = "pokemon" | "one-piece" | "mtg" | "sports";
 
@@ -15,7 +16,7 @@ export type CategoryConfig = {
   label: string;
   /** Short label for compact switcher chips */
   shortLabel: string;
-  /** Add-on price display (Pokémon $2.99 when shown as add-on) */
+  /** Add-on price display (same expansion-pack price for every category). */
   priceLabel: string | null;
   status: CategoryStatus;
 };
@@ -25,15 +26,15 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     id: "pokemon",
     label: "Pokémon",
     shortLabel: "Pokémon",
-    /** Shown when Pokémon is offered as a $2.99 add-on (Premium chose another live cat). */
-    priceLabel: "$2.99",
+    /** Shown when Pokémon is offered as an add-on (Premium chose another live cat). */
+    priceLabel: ADDON_PRICE_LABEL,
     status: "live",
   },
   {
     id: "one-piece",
     label: "One Piece English",
     shortLabel: "One Piece",
-    priceLabel: "$2.99",
+    priceLabel: ADDON_PRICE_LABEL,
     // Public optcgapi.com fallback serves sets, prices, and art without OPTCG_API_KEY.
     status: "live",
   },
@@ -41,15 +42,14 @@ export const CATEGORIES: readonly CategoryConfig[] = [
     id: "mtg",
     label: "Magic: The Gathering",
     shortLabel: "MTG",
-    priceLabel: "$2.99",
-    // Preview-only. Revert to coming_soon before merge unless COO approves go-live.
+    priceLabel: ADDON_PRICE_LABEL,
     status: "live",
   },
   {
     id: "sports",
     label: "Sports",
     shortLabel: "Sports",
-    priceLabel: "$2.99",
+    priceLabel: ADDON_PRICE_LABEL,
     status: "coming_soon",
   },
 ] as const;

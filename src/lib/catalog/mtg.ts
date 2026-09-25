@@ -7,9 +7,7 @@
  * Art: Scryfall `image_uris` (front face when the card is double-faced).
  * Prices: USD fields Scryfall actually returns (`usd`, `usd_foil`, `usd_etched`).
  * Never invent a price. MoM is N/A (no Cardmarket-style history).
- *
- * This branch sets category status to `live` so public routes serve the adapter
- * on deploy previews. Revert to `coming_soon` before merge unless COO approves.
+ * Category status is live. Sports stays coming_soon.
  */
 
 import type { PokemonCard, PokemonSet } from "@/lib/types";

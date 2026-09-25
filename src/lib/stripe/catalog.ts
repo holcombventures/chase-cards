@@ -101,7 +101,11 @@ export function getPriceIdForEntitlement(
   return raw || null;
 }
 
-/** Build reverse map priceId → entitlement key(s) from current env. */
+/**
+ * Reverse map of Price ID → one entitlement key.
+ * Duplicate IDs collapse to the last key, so this must not grant entitlements.
+ * Grants use session metadata; the Price ID is only an allow-list check.
+ */
 export function buildPriceIdToEntitlementMap(): Map<
   string,
   CheckoutEntitlementKey

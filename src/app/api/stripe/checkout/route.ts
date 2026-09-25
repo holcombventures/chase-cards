@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            'Premium checkout requires premiumCategory: a live category id ("pokemon" | "one-piece").',
+            'Premium checkout requires premiumCategory: a live category id ("pokemon" | "one-piece" | "mtg").',
           demoFallback: true,
         },
         { status: 400 },

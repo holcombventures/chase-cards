@@ -87,7 +87,7 @@ export async function confirmCheckoutSession(
     };
     if (!res.ok) {
       return {
-        paid: false,
+        paid: Boolean(body.paid),
         entitlements: [],
         error: body.error || `Confirm failed (${res.status})`,
       };
