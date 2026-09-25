@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import {
   ADDON_CATEGORY_IDS,
-  LIVE_CATALOG_IDS,
+  PAID_LIVE_CATALOG_IDS,
   getCategory,
   isLiveCategory,
   type CategoryId,
@@ -110,7 +110,7 @@ export function EntitlementShop({
       ids.push("mtg");
     }
     if (entitlements.premium || entitlements.allAccess) {
-      for (const id of LIVE_CATALOG_IDS) {
+      for (const id of PAID_LIVE_CATALOG_IDS) {
         if (!hasFullAccessInCategory(entitlements, id) && !ids.includes(id)) {
           ids.push(id);
         }
@@ -179,7 +179,7 @@ export function EntitlementShop({
                 Choose your Premium category:
               </p>
               <div className="flex flex-col gap-1.5">
-                {LIVE_CATALOG_IDS.map((id) => {
+                {PAID_LIVE_CATALOG_IDS.map((id) => {
                   const cat = getCategory(id);
                   const key = `premium:${id}`;
                   return (
@@ -286,8 +286,9 @@ export function EntitlementShop({
       ) : !SHOW_SPORT_ADDON_PURCHASES ? (
         <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
           Per-sport add-ons stay hidden until Sports adapters ship. Free: top 3
-          chase on every live catalog. Premium: pick one category for full
-          depth; add-ons unlock the others.
+          chase on Pokémon, One Piece, and MTG. Disney Lorcana stays free.
+          Premium: pick one paid category for full depth; add-ons unlock the
+          others.
         </p>
       ) : null}
 

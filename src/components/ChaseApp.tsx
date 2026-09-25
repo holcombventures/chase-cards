@@ -13,6 +13,8 @@ import { formatPricesAsOf, selectChaseCards, sortBySetNumber } from "@/lib/price
 import {
   DEFAULT_CATEGORY_ID,
   LIVE_CATALOG_IDS,
+  LORCANA_FAN_NOTE,
+  PAID_LIVE_CATALOG_IDS,
   getCategory,
   isLiveCategory,
   type CategoryId,
@@ -193,7 +195,7 @@ export function ChaseApp() {
   );
 
   const buyAddonFor = useCallback(
-    async (addonCategoryId: CategoryId) => {
+    async (addonCategoryId: Exclude<CategoryId, "lorcana">) => {
       setCheckoutBusy(true);
       try {
         await purchaseEntitlement(addonCategoryId, {
@@ -215,6 +217,7 @@ export function ChaseApp() {
   const isPokemon = categoryId === "pokemon";
   const isOnePiece = categoryId === "one-piece";
   const isMtg = categoryId === "mtg";
+  const isLorcana = categoryId === "lorcana";
   const fullAccessHere = hasFullAccessInCategory(categoryId);
   const categoryHint = categoryEntitlementHint(entitlements, categoryId);
   const ownsThis = ownsCategory(categoryId);
@@ -668,20 +671,31 @@ export function ChaseApp() {
   const showMtgPriceNote =
     isMtg && hasPricedCards && priceSource === "scryfall";
 
+  const showLorcanaPriceNote =
+    isLorcana && hasPricedCards && priceSource === "tcgcsv";
+
   const unlockActions: GateAction[] = useMemo(() => {
     const actions: GateAction[] = [];
-    const addonLabel = `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`;
-    const addonAction: GateAction = {
-      label: addonLabel,
-      onClick: () => unlockAddon(categoryId),
-      accent: "sky",
-      checkoutKey: categoryId as "pokemon" | "one-piece" | "mtg" | "sports",
-    };
+    const addonCheckoutKey =
+      categoryId === "pokemon" ||
+      categoryId === "one-piece" ||
+      categoryId === "mtg" ||
+      categoryId === "sports"
+        ? categoryId
+        : null;
+    const addonAction: GateAction | null = addonCheckoutKey
+      ? {
+          label: `${category.shortLabel} add-on · ${category.priceLabel ?? ADDON_PRICE_LABEL}`,
+          onClick: () => unlockAddon(addonCheckoutKey),
+          accent: "sky",
+          checkoutKey: addonCheckoutKey,
+        }
+      : null;
     // MTG is the $1.99 add-on (STRIPE_PRICE_MTG), including for free visitors.
-    if (isMtg && !fullAccessHere) {
+    if (addonAction && isMtg && !fullAccessHere) {
       actions.push(addonAction);
     }
-    if (!isPremium) {
+    if (!isPremium && !isLorcana) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: () => unlockPremium(categoryId),
@@ -689,11 +703,11 @@ export function ChaseApp() {
         checkoutKey: "premium",
         needsPremiumPicker: true,
       });
-    } else if (!fullAccessHere && !isMtg) {
+    } else if (addonAction && !fullAccessHere && !isMtg) {
       // Premium owned but this live category still top-3 → offer add-on
       actions.push(addonAction);
     }
-    if (!entitlements.allAccess) {
+    if (!entitlements.allAccess && !isLorcana) {
       actions.push({
         label: `All Access · ${ALL_ACCESS_PRICE_LABEL}`,
         onClick: unlockAllAccess,
@@ -701,7 +715,7 @@ export function ChaseApp() {
         checkoutKey: "all_access",
       });
     }
-    if (actions.length === 0) {
+    if (actions.length === 0 && !isLorcana) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: () => unlockPremium(categoryId),
@@ -713,6 +727,7 @@ export function ChaseApp() {
     return actions;
   }, [
     isMtg,
+    isLorcana,
     isPremium,
     fullAccessHere,
     category.shortLabel,
@@ -761,19 +776,25 @@ export function ChaseApp() {
     ? "Choose set · Pokémon TCG"
     : isOnePiece
       ? "Choose set · One Piece English"
-      : `Choose set · ${category.shortLabel}`;
+      : isLorcana
+        ? "Choose set · Disney Lorcana"
+        : `Choose set · ${category.shortLabel}`;
 
   const loadingSetsMessage = isPokemon
     ? "Fetching set list from the Pokémon TCG API."
     : isOnePiece
       ? "Fetching One Piece English sets."
-      : `Fetching ${category.label} sets.`;
+      : isLorcana
+        ? "Fetching Disney Lorcana sets."
+        : `Fetching ${category.label} sets.`;
 
   const loadingCardsMessage = isPokemon
     ? "Fetching cards and market prices (Pokémon TCG API, with TCGdex fallback if needed)."
     : isOnePiece
       ? "Fetching One Piece cards and USD market prices."
-      : `Fetching ${category.label} cards.`;
+      : isLorcana
+        ? "Fetching Lorcana cards and TCGplayer market prices."
+        : `Fetching ${category.label} cards.`;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
@@ -800,6 +821,9 @@ export function ChaseApp() {
           ownedIds={ownedIds}
           disabled={catalogLive && uiCardsLoading}
         />
+        {isLorcana ? (
+          <p className="text-xs leading-relaxed text-slate-400">{LORCANA_FAN_NOTE}</p>
+        ) : null}
       </Hero>
 
       {checkoutBanner ? (
@@ -1028,7 +1052,7 @@ export function ChaseApp() {
                         </p>
                       ) : null}
                     </div>
-                    {mode === "chase" ? (
+                    {mode === "chase" && !isLorcana ? (
                       <div
                         className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-950/70 p-1"
                         role="status"
@@ -1079,6 +1103,12 @@ export function ChaseApp() {
                   {showMtgPriceNote ? (
                     <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100/90">
                       Prices via Scryfall (USD) when provided
+                    </p>
+                  ) : null}
+                  {isLorcana ? (
+                    <p className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
+                      {LORCANA_FAN_NOTE}
+                      {showLorcanaPriceNote ? " Market prices are TCGplayer USD." : ""}
                     </p>
                   ) : null}
                   {mode === "chase" && chaseMode === "estimated" && chaseNote ? (
@@ -1213,15 +1243,16 @@ export function ChaseApp() {
         >
           Scryfall
         </a>
-        . Market prices never invented. Not affiliated with Bandai, Nintendo,
-        TPC, or Wizards of the Coast.
+        . Disney Lorcana via TCGCSV (TCGplayer). {LORCANA_FAN_NOTE} Market
+        prices never invented. Not affiliated with Bandai, Nintendo, TPC, or
+        Wizards of the Coast.
         {entitlementsReady ? (
           <>
             {" "}
-            · Free: top {FREE_CHASE_LIMIT} chase on every live catalog ·
-            Premium {PREMIUM_PRICE_LABEL} (choose one category) · Add-ons{" "}
-            {ADDON_PRICE_LABEL} · All Access {ALL_ACCESS_PRICE_LABEL} · Stripe
-            when configured.
+            · Free: top {FREE_CHASE_LIMIT} chase on Pokémon, One Piece, and MTG
+            · Disney Lorcana is free · Premium {PREMIUM_PRICE_LABEL} (choose one
+            paid category) · Add-ons {ADDON_PRICE_LABEL} · All Access{" "}
+            {ALL_ACCESS_PRICE_LABEL} · Stripe when configured.
           </>
         ) : null}
       </footer>
@@ -1269,7 +1300,7 @@ function ChaseUpgradeBar({
         </button>
       ) : picking ? (
         <div className="flex flex-wrap items-center gap-1.5">
-          {LIVE_CATALOG_IDS.map((id) => (
+          {PAID_LIVE_CATALOG_IDS.map((id) => (
             <button
               key={id}
               type="button"
@@ -1383,7 +1414,7 @@ function ComingSoonCategoryPanel({
         <div className="flex w-full flex-col items-stretch gap-2 pt-2 sm:flex-row sm:flex-wrap sm:justify-center">
           {picking ? (
             <>
-              {LIVE_CATALOG_IDS.map((id) => (
+              {PAID_LIVE_CATALOG_IDS.map((id) => (
                 <button
                   key={id}
                   type="button"

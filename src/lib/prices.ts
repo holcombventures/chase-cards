@@ -190,6 +190,9 @@ export function estimateChaseScore(
   if (categoryId === "mtg") {
     return scoreMtg(card);
   }
+  if (categoryId === "lorcana") {
+    return scoreLorcana(card);
+  }
   return scorePokemon(card);
 }
 
@@ -249,6 +252,26 @@ function scoreMtg(card: CardWithPrice): number {
   else if (/special/.test(rarity)) score += 60;
   else if (/rare/.test(rarity)) score += 40;
   else if (/uncommon/.test(rarity)) score += 10;
+  return score;
+}
+
+function scoreLorcana(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase();
+
+  if (/iconic/.test(rarity)) score += 100;
+  else if (/enchanted/.test(rarity)) score += 90;
+  else if (/epic/.test(rarity)) score += 75;
+  else if (/legendary/.test(rarity)) score += 55;
+  else if (/super\s*rare/.test(rarity)) score += 40;
+  else if (/rare/.test(rarity)) score += 18;
+  else if (/uncommon/.test(rarity)) score += 8;
+  else if (/common/.test(rarity)) score += 2;
+
+  const printed = card.set?.printedTotal ?? 0;
+  const parsed = parseSetNumber(card.number || "");
+  if (printed > 0 && parsed.num > printed) score += 45;
+
   return score;
 }
 

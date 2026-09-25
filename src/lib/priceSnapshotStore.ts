@@ -4,6 +4,7 @@ import {
   buildPriceSnapshot,
   parsePriceSnapshot,
   priceSnapshotKey,
+  priceSnapshotTtlMs,
   snapshotIsFresh,
   type PriceSnapshot,
 } from "./priceSnapshot";
@@ -150,7 +151,9 @@ export async function readFreshPriceSnapshot(
     return null;
   }
   const snap = parsePriceSnapshot(raw);
-  if (!snap || !snapshotIsFresh(snap.storedAt, now)) return null;
+  if (!snap || !snapshotIsFresh(snap.storedAt, now, priceSnapshotTtlMs(category))) {
+    return null;
+  }
   return snap;
 }
 

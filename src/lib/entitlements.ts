@@ -2,13 +2,15 @@
  * Entitlements (localStorage; Stripe Checkout grants via confirm).
  *
  * Model:
- * - FREE: top 3 chase visible for EVERY live category (Pokémon, One Piece, and MTG).
- * - Premium (PREMIUM_PRICE_LABEL) — buyer CHOOSES which single live category gets full unlock
- *   (premiumCategory). Other live categories stay top-3-only until add-on / All Access.
- * - Category add-on (ADDON_PRICE_LABEL) — unlock full access on a live category they did NOT
+ * - FREE: top 3 chase visible for every paid live category (Pokémon, One Piece, and MTG).
+ * - Disney Lorcana is free in full (fan-content policy). It is not a Premium choice,
+ *   not an add-on, and not behind an entitlement gate.
+ * - Premium (PREMIUM_PRICE_LABEL) — buyer CHOOSES which single paid live category gets full unlock
+ *   (premiumCategory). Other paid live categories stay top-3-only until add-on / All Access.
+ * - Category add-on (ADDON_PRICE_LABEL) — unlock full access on a paid live category they did NOT
  *   pick for Premium (including Pokémon when Premium chose One Piece).
  *   MTG is sold on this add-on (STRIPE_PRICE_MTG) and unlocks that catalog on its own.
- *   Coming-soon add-ons (sports) still reserve entitlement.
+ *   Coming-soon add-ons (sports) still reserve entitlement. Lorcana is never sold.
  * - Per-sport add-ons — baseball | basketball | football | hockey | soccer (ADDON_PRICE_LABEL)
  * - All Access (ALL_ACCESS_PRICE_LABEL) — unlocks all categories (no picker needed)
  *
@@ -18,11 +20,13 @@
 
 import {
   ADDON_CATEGORY_IDS,
-  LIVE_CATALOG_IDS,
+  PAID_LIVE_CATALOG_IDS,
   type CategoryId,
   getCategory,
   isCategoryId,
+  isFreeCategory,
   isLiveCategory,
+  isPaidLiveCategory,
 } from "@/lib/catalog/types";
 import {
   SPORT_ADDON_IDS,
@@ -104,7 +108,7 @@ function normalizePremiumCategory(
   raw: unknown,
   premium: boolean,
 ): CategoryId | null {
-  if (typeof raw === "string" && isCategoryId(raw) && isLiveCategory(raw)) {
+  if (typeof raw === "string" && isCategoryId(raw) && isPaidLiveCategory(raw)) {
     return raw;
   }
   // Migrate: premium with missing/invalid premiumCategory → grandfather Pokémon
@@ -192,8 +196,9 @@ export function writeEntitlements(state: EntitlementsState): void {
           normalized.categories.push(id);
         }
       }
-      // Ensure live categories are entitled via categories too (incl. pokemon)
-      for (const id of LIVE_CATALOG_IDS) {
+      // Ensure paid live categories are entitled via categories too (incl. pokemon).
+      // Free catalogs (Lorcana) are not stored as a purchase.
+      for (const id of PAID_LIVE_CATALOG_IDS) {
         if (!normalized.categories.includes(id)) {
           normalized.categories.push(id);
         }
@@ -279,6 +284,7 @@ export function hasFullAccessInCategory(
   categoryId: CategoryId,
 ): boolean {
   if (!isLiveCategory(categoryId)) return false;
+  if (isFreeCategory(categoryId)) return true;
   if (state.allAccess) return true;
   if (categoryId === "mtg" && state.categories.includes("mtg")) return true;
   if (
@@ -299,9 +305,9 @@ export function unlockPremiumState(
   prev: EntitlementsState,
   categoryId: CategoryId,
 ): EntitlementsState {
-  if (!isLiveCategory(categoryId)) return prev;
+  if (!isPaidLiveCategory(categoryId)) return prev;
   const premiumCategory =
-    prev.premiumCategory && isLiveCategory(prev.premiumCategory)
+    prev.premiumCategory && isPaidLiveCategory(prev.premiumCategory)
       ? prev.premiumCategory
       : categoryId;
   return {
@@ -319,6 +325,7 @@ export function unlockAddonState(
   prev: EntitlementsState,
   categoryId: CategoryId,
 ): EntitlementsState {
+  if (isFreeCategory(categoryId)) return prev;
   if (categoryId === "pokemon") {
     if (prev.premiumCategory === "pokemon") return prev;
     if (prev.categories.includes("pokemon")) return prev;
@@ -351,7 +358,7 @@ export function unlockAllAccessState(): EntitlementsState {
     premium: true,
     allAccess: true,
     premiumCategory: null,
-    categories: [...ADDON_CATEGORY_IDS, ...LIVE_CATALOG_IDS].filter(
+    categories: [...ADDON_CATEGORY_IDS, ...PAID_LIVE_CATALOG_IDS].filter(
       (id, i, arr) => arr.indexOf(id) === i,
     ),
     sports: [...SPORT_ADDON_IDS],
@@ -381,7 +388,7 @@ export function applyCheckoutEntitlements(
   for (const key of keys) {
     if (key === "premium") {
       const chosen =
-        options?.premiumCategory && isLiveCategory(options.premiumCategory)
+        options?.premiumCategory && isPaidLiveCategory(options.premiumCategory)
           ? options.premiumCategory
           : "pokemon";
       next = unlockPremiumState(next, chosen);
@@ -433,9 +440,9 @@ export function categoryEntitlementHint(
   return "locked_coming_soon";
 }
 
-/** Live categories eligible for the Premium picker. */
+/** Paid live categories eligible for the Premium picker. Lorcana is omitted. */
 export function premiumPickerCategories(): CategoryId[] {
-  return [...LIVE_CATALOG_IDS];
+  return [...PAID_LIVE_CATALOG_IDS];
 }
 
 export type { SportAddonId, CheckoutEntitlementKey };
