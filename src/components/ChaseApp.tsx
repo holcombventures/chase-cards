@@ -45,6 +45,7 @@ import {
   normalizePricePatches,
 } from "@/lib/cardCacheModel";
 import { readSetCardCache, writeSetCardCache } from "@/lib/setCardCache";
+import { resolveSetSelection } from "@/lib/defaultSet";
 
 /** How many blurred teaser tiles to show under the free chase list */
 const LOCKED_TEASER_COUNT = 3;
@@ -73,19 +74,6 @@ function cardsEndpoint(
   return `/api/sets/${encodeURIComponent(id)}/cards${suffix}?${qs.toString()}`;
 }
 
-
-function pickDefaultSetId(sets: PokemonSet[]): string {
-  if (!sets.length) return "";
-  // Prefer a set released at least 3 days ago so brand-new upstream gaps
-  // are less likely to be the first thing a visitor hits.
-  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
-  const stable = sets.find((s) => {
-    const raw = (s.releaseDate || "").replace(/\//g, "-");
-    const t = Date.parse(raw);
-    return Number.isFinite(t) && t <= cutoff;
-  });
-  return (stable ?? sets[0]).id;
-}
 
 export function ChaseApp() {
   const {
@@ -300,7 +288,7 @@ export function ChaseApp() {
       if (!res.ok) throw new Error(body.error || "Failed to load sets.");
       const list = (body.data as PokemonSet[]) || [];
       setSets(list);
-      setSetId((prev) => prev || pickDefaultSetId(list));
+      setSetId((prev) => resolveSetSelection(prev, list, categoryId));
     } catch (e) {
       setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
     } finally {
@@ -331,7 +319,7 @@ export function ChaseApp() {
         if (cancelled) return;
         const list = (body.data as PokemonSet[]) || [];
         setSets(list);
-        setSetId((prev) => prev || pickDefaultSetId(list));
+        setSetId((prev) => resolveSetSelection(prev, list, categoryId));
       } catch (e) {
         if (!cancelled) {
           setSetsError(e instanceof Error ? e.message : "Failed to load sets.");
