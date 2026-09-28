@@ -52,7 +52,9 @@ export function CategorySwitcher({
                   ? owned
                     ? `${cat.label} — entitled · catalog coming soon`
                     : `${cat.label} — coming soon`
-                  : cat.label
+                  : cat.free
+                    ? `${cat.label} — free catalog`
+                    : cat.label
               }
             >
               <span className="block text-xs font-semibold sm:text-sm">
@@ -66,6 +68,15 @@ export function CategorySwitcher({
                   ].join(" ")}
                 >
                   {owned ? "Entitled · soon" : "Coming soon"}
+                </span>
+              ) : cat.free ? (
+                <span
+                  className={[
+                    "mt-0.5 block text-[10px] font-medium uppercase tracking-wide",
+                    selected ? "text-slate-800/80" : "text-emerald-400/80",
+                  ].join(" ")}
+                >
+                  Free
                 </span>
               ) : (
                 <span

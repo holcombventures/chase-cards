@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CategoryId } from "@/lib/catalog/types";
-import { LIVE_CATALOG_IDS, getCategory } from "@/lib/catalog/types";
+import { PAID_LIVE_CATALOG_IDS, getCategory } from "@/lib/catalog/types";
 import { PREMIUM_PRICE_LABEL } from "@/hooks/usePremium";
 import { purchaseEntitlement } from "@/lib/stripe/checkoutClient";
 import type { CheckoutEntitlementKey } from "@/lib/stripe/catalog";
@@ -170,7 +170,7 @@ export function PremiumGate({
             Choose one category for Premium full unlock:
           </p>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
-            {LIVE_CATALOG_IDS.map((id) => {
+            {PAID_LIVE_CATALOG_IDS.map((id) => {
               const cat = getCategory(id);
               const key = `premium:${id}`;
               const busy = busyKey === key;

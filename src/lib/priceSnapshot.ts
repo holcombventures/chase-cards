@@ -8,10 +8,17 @@ import {
 } from "./cardCacheModel";
 
 /**
- * Shared price snapshot TTL. Art/catalog caching stays on its longer cadence
- * (process memory + CDN). Only these price snapshots expire after ~4 hours.
+ * Shared price snapshot TTL for Pokémon, One Piece, and MTG.
+ * Art/catalog caching stays on its longer cadence (process memory + CDN).
+ * Lorcana uses 24h because TCGCSV refreshes about once a day.
  */
 export const PRICE_SNAPSHOT_TTL_MS = 4 * 60 * 60 * 1000;
+export const LORCANA_PRICE_SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function priceSnapshotTtlMs(category: string): number {
+  if (category === "lorcana") return LORCANA_PRICE_SNAPSHOT_TTL_MS;
+  return PRICE_SNAPSHOT_TTL_MS;
+}
 
 export const PRICE_SNAPSHOT_STORE = "price-snapshots";
 
@@ -23,7 +30,7 @@ export type PriceSnapshot = {
   setId: string;
   /** When this snapshot was fetched from upstream. Shown to users. */
   pricesAsOf: string;
-  /** Epoch ms used for the 4h TTL. Not a market timestamp. */
+  /** Epoch ms used for the category TTL. Not a market timestamp. */
   storedAt: number;
   data: CardPricePatch[];
   meta: CardsApiMeta;

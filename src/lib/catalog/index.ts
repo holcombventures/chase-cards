@@ -7,8 +7,9 @@ import { isLiveCategory } from "./types";
 import * as pokemon from "./pokemon";
 import * as onePiece from "./one-piece";
 import * as mtg from "./mtg";
+import * as lorcana from "./lorcana";
 
-export type CatalogAdapterId = "pokemon" | "one-piece" | "mtg";
+export type CatalogAdapterId = "pokemon" | "one-piece" | "mtg" | "lorcana";
 
 /** Adapter exists but category status is still coming_soon. Not an upstream failure. */
 export class CatalogNotLiveError extends Error {
@@ -20,7 +21,9 @@ export class CatalogNotLiveError extends Error {
 }
 
 export function hasCatalogAdapter(id: CategoryId): id is CatalogAdapterId {
-  return id === "pokemon" || id === "one-piece" || id === "mtg";
+  return (
+    id === "pokemon" || id === "one-piece" || id === "mtg" || id === "lorcana"
+  );
 }
 
 export function assertLiveCatalog(id: CategoryId): CatalogAdapterId {
@@ -34,6 +37,7 @@ export const adapters = {
   pokemon,
   "one-piece": onePiece,
   mtg,
+  lorcana,
 } as const;
 
 export function getCatalogAdapter(id: CatalogAdapterId) {
@@ -45,8 +49,12 @@ export {
   DEFAULT_CATEGORY_ID,
   ADDON_CATEGORY_IDS,
   LIVE_CATALOG_IDS,
+  PAID_LIVE_CATALOG_IDS,
+  LORCANA_FAN_NOTE,
   getCategory,
   isLiveCategory,
+  isFreeCategory,
+  isPaidLiveCategory,
   isCategoryId,
   type CategoryId,
   type CategoryConfig,

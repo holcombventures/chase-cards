@@ -12,6 +12,8 @@ import * as onePieceCatalog from "@/lib/catalog/one-piece";
 import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
+import * as lorcanaCatalog from "@/lib/catalog/lorcana";
+import { LorcanaApiError } from "@/lib/catalog/lorcana";
 
 function parseCategory(request: Request): CategoryId {
   const url = new URL(request.url);
@@ -52,7 +54,9 @@ export async function GET(request: Request) {
         ? await onePieceCatalog.fetchSets()
         : adapterId === "mtg"
           ? await mtgCatalog.fetchSets()
-          : await pokemonCatalog.fetchSets();
+          : adapterId === "lorcana"
+            ? await lorcanaCatalog.fetchSets()
+            : await pokemonCatalog.fetchSets();
     return NextResponse.json({
       data: sets,
       meta: { category: adapterId },
@@ -70,7 +74,7 @@ export async function GET(request: Request) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError) {
+    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
       return NextResponse.json(
         { error: err.message },
         {

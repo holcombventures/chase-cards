@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Chase Cards — See the expensive chase before you buy the box",
   description:
-    "Free unlocks the top 3 chase cards. Premium opens the full set. Pokémon, One Piece English, and Magic: The Gathering are live; Sports coming soon.",
+    "Free unlocks the top 3 chase cards. Premium opens the full set. Pokémon, One Piece English, and Magic: The Gathering are live; Disney Lorcana is free; Sports coming soon.",
 };
 
 export const viewport: Viewport = {
@@ -34,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <link rel="preconnect" href="https://images.pokemontcg.io" />
         <link rel="preconnect" href="https://images.scrydex.com" />
+        <link rel="preconnect" href="https://tcgplayer-cdn.tcgplayer.com" />
       </head>
       <body className="min-h-full flex flex-col bg-slate-900 text-slate-100">
         {children}

@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import type { CardsApiBody } from "./cardCacheModel";
 import { formatPricesAsOf } from "./prices";
 import {
+  LORCANA_PRICE_SNAPSHOT_TTL_MS,
   PRICE_SNAPSHOT_TTL_MS,
   buildPriceSnapshot,
   mergeFullBodyWithSnapshot,
@@ -10,6 +11,7 @@ import {
   priceCacheRefreshAllowed,
   pricePayloadFromSnapshot,
   priceSnapshotKey,
+  priceSnapshotTtlMs,
   snapshotIsFresh,
 } from "./priceSnapshot";
 import {
@@ -77,6 +79,36 @@ test("snapshot stays fresh for 4 hours and expires after that", () => {
     false,
   );
   assert.equal(PRICE_SNAPSHOT_TTL_MS, 4 * 60 * 60 * 1000);
+});
+
+test("lorcana snapshots stay fresh for 24 hours", async () => {
+  assert.equal(priceSnapshotTtlMs("pokemon"), PRICE_SNAPSHOT_TTL_MS);
+  assert.equal(priceSnapshotTtlMs("lorcana"), LORCANA_PRICE_SNAPSHOT_TTL_MS);
+  assert.equal(LORCANA_PRICE_SNAPSHOT_TTL_MS, 24 * 60 * 60 * 1000);
+
+  setPriceSnapshotBackendForTests(memoryPriceSnapshotBackend());
+  const now = 20_000;
+  await savePriceSnapshot(
+    "lorcana",
+    "24666",
+    bodyFor(sampleCard({ priceSource: "tcgcsv", marketPrice: 2008.2 }), "lorcana"),
+    now,
+  );
+
+  const stillFresh = await readFreshPriceSnapshot(
+    "lorcana",
+    "24666",
+    now + PRICE_SNAPSHOT_TTL_MS + 1,
+  );
+  assert.equal(stillFresh?.data[0].marketPrice, 2008.2);
+  assert.equal(stillFresh?.data[0].priceSource, "tcgcsv");
+
+  const expired = await readFreshPriceSnapshot(
+    "lorcana",
+    "24666",
+    now + LORCANA_PRICE_SNAPSHOT_TTL_MS + 1,
+  );
+  assert.equal(expired, null);
 });
 
 test("snapshot keeps null prices and the original as-of time", () => {

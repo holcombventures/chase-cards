@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isCategoryId, isLiveCategory } from "@/lib/catalog/types";
+import { isCategoryId, isPaidLiveCategory } from "@/lib/catalog/types";
 import { getStripe } from "@/lib/stripe/client";
 import { isStripeConfigured } from "@/lib/stripe/catalog";
 import { grantFromCheckoutSession } from "@/lib/stripe/entitlements-from-session";
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
 
     const rawCat = session.metadata?.premium_category?.trim();
     const premiumCategory =
-      rawCat && isCategoryId(rawCat) && isLiveCategory(rawCat) ? rawCat : null;
+      rawCat && isCategoryId(rawCat) && isPaidLiveCategory(rawCat) ? rawCat : null;
 
     return NextResponse.json({
       paid: true,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   isCategoryId,
-  isLiveCategory,
+  isPaidLiveCategory,
   type CategoryId,
 } from "@/lib/catalog/types";
 import { getStripe, resolveSiteOrigin } from "@/lib/stripe/client";
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     if (
       typeof raw !== "string" ||
       !isCategoryId(raw) ||
-      !isLiveCategory(raw)
+      !isPaidLiveCategory(raw)
     ) {
       return NextResponse.json(
         {
