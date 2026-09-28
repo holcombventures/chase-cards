@@ -28,6 +28,7 @@ test("pokemon default is the Pitch Black set id", () => {
   assert.equal(DEFAULT_SET_BY_CATEGORY.pokemon, "me5");
   assert.equal(DEFAULT_SET_BY_CATEGORY["one-piece"], undefined);
   assert.equal(DEFAULT_SET_BY_CATEGORY.mtg, undefined);
+  assert.equal(DEFAULT_SET_BY_CATEGORY.lorcana, undefined);
 });
 
 test("pokemon selects Pitch Black even when a newer set is listed first", () => {
@@ -48,13 +49,14 @@ test("pokemon falls back to the newest stable set when the pin is missing", () =
   assert.equal(pickDefaultSetId(sets, "pokemon"), "me55");
 });
 
-test("one-piece and mtg keep the newest-stable default", () => {
+test("one-piece, mtg, and lorcana keep the newest-stable default", () => {
   const sets = [
     set("op15", "1999/06/01", "A Newer Stable Set"),
     set("me5", "2026/07/17", "Pitch Black"),
   ];
   assert.equal(pickDefaultSetId(sets, "one-piece"), "op15");
   assert.equal(pickDefaultSetId(sets, "mtg"), "op15");
+  assert.equal(pickDefaultSetId(sets, "lorcana"), "op15");
   assert.equal(pickDefaultSetId(sets), "op15");
 });
 
