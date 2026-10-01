@@ -66,6 +66,26 @@ test("falls back to the first set when none are 3 days old", () => {
   assert.equal(pickDefaultSetId(sets, "one-piece"), "future-a");
 });
 
+test("gundam defaults to the newest stable booster, not a newer starter", () => {
+  const daysAgo = (days: number) => {
+    const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(date.getUTCDate()).padStart(2, "0");
+    return `${y}/${m}/${d}`;
+  };
+  const sets = [
+    set("24800", daysAgo(6), "Starter Deck 11: Aquatic Assault"),
+    set("24699", daysAgo(40), "Freedom Ascension"),
+    set("24633", daysAgo(80), "Phantom Aria"),
+  ];
+  sets[0].series = "ST11";
+  sets[1].series = "GD05";
+  sets[2].series = "GD04";
+  assert.equal(pickDefaultSetId(sets, "gundam"), "24699");
+  assert.equal(pickDefaultSetId(sets, "lorcana"), "24800");
+});
+
 test("empty catalog yields no set id", () => {
   assert.equal(pickDefaultSetId([], "pokemon"), "");
   assert.equal(resolveSetSelection("", [], "pokemon"), "");

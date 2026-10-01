@@ -3,14 +3,15 @@
  *
  * Model:
  * - FREE: top 3 chase visible for every paid live category (Pokémon, One Piece, and MTG).
- * - Disney Lorcana is free in full (fan-content policy). It is not a Premium choice,
- *   not an add-on, and not behind an entitlement gate.
+ * - Disney Lorcana, Riftbound, and Gundam Card Game are free in full (fan-content
+ *   policy). They are not a Premium choice, not an add-on, and not behind an
+ *   entitlement gate.
  * - Premium (PREMIUM_PRICE_LABEL) — buyer CHOOSES which single paid live category gets full unlock
  *   (premiumCategory). Other paid live categories stay top-3-only until add-on / All Access.
  * - Category add-on (ADDON_PRICE_LABEL) — unlock full access on a paid live category they did NOT
  *   pick for Premium (including Pokémon when Premium chose One Piece).
  *   MTG is sold on this add-on (STRIPE_PRICE_MTG) and unlocks that catalog on its own.
- *   Coming-soon add-ons (sports) still reserve entitlement. Lorcana is never sold.
+ *   Coming-soon add-ons (sports) still reserve entitlement. Free catalogs are never sold.
  * - Per-sport add-ons — baseball | basketball | football | hockey | soccer (ADDON_PRICE_LABEL)
  * - All Access (ALL_ACCESS_PRICE_LABEL) — unlocks all categories (no picker needed)
  *
@@ -197,7 +198,7 @@ export function writeEntitlements(state: EntitlementsState): void {
         }
       }
       // Ensure paid live categories are entitled via categories too (incl. pokemon).
-      // Free catalogs (Lorcana) are not stored as a purchase.
+      // Free catalogs are not stored as a purchase.
       for (const id of PAID_LIVE_CATALOG_IDS) {
         if (!normalized.categories.includes(id)) {
           normalized.categories.push(id);
@@ -440,7 +441,7 @@ export function categoryEntitlementHint(
   return "locked_coming_soon";
 }
 
-/** Paid live categories eligible for the Premium picker. Lorcana is omitted. */
+/** Paid live categories eligible for the Premium picker. Free catalogs are omitted. */
 export function premiumPickerCategories(): CategoryId[] {
   return [...PAID_LIVE_CATALOG_IDS];
 }

@@ -15,11 +15,18 @@ function isReleasedBeforeCutoff(releaseDate: string, cutoffMs: number): boolean 
   return Number.isFinite(t) && t <= cutoffMs;
 }
 
+function newestStableId(sets: readonly PokemonSet[]): string {
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+  const stable = sets.find((set) => isReleasedBeforeCutoff(set.releaseDate, cutoff));
+  return (stable ?? sets[0]).id;
+}
+
 /**
  * Set to show when nothing is selected yet.
  * A pinned id is used only when that set is in the loaded list. Otherwise
  * the previous rule applies: the first set released at least 3 days ago,
  * or the first set in list order when none are that old.
+ * Gundam prefers the newest stable booster (GDxx) over a newer starter deck.
  */
 export function pickDefaultSetId(
   sets: PokemonSet[],
@@ -30,11 +37,12 @@ export function pickDefaultSetId(
   const pinned = categoryId ? DEFAULT_SET_BY_CATEGORY[categoryId] : undefined;
   if (pinned && sets.some((set) => set.id === pinned)) return pinned;
 
-  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
-  const stable = sets.find((set) =>
-    isReleasedBeforeCutoff(set.releaseDate, cutoff),
-  );
-  return (stable ?? sets[0]).id;
+  if (categoryId === "gundam") {
+    const boosters = sets.filter((set) => /^GD\d+$/i.test(set.series || ""));
+    if (boosters.length) return newestStableId(boosters);
+  }
+
+  return newestStableId(sets);
 }
 
 /** Keep a set the visitor already chose; otherwise apply the category default. */

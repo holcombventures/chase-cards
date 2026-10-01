@@ -83,7 +83,10 @@ test("snapshot stays fresh for 4 hours and expires after that", () => {
 
 test("lorcana snapshots stay fresh for 24 hours", async () => {
   assert.equal(priceSnapshotTtlMs("pokemon"), PRICE_SNAPSHOT_TTL_MS);
+  assert.equal(priceSnapshotTtlMs("mtg"), PRICE_SNAPSHOT_TTL_MS);
   assert.equal(priceSnapshotTtlMs("lorcana"), LORCANA_PRICE_SNAPSHOT_TTL_MS);
+  assert.equal(priceSnapshotTtlMs("riftbound"), LORCANA_PRICE_SNAPSHOT_TTL_MS);
+  assert.equal(priceSnapshotTtlMs("gundam"), LORCANA_PRICE_SNAPSHOT_TTL_MS);
   assert.equal(LORCANA_PRICE_SNAPSHOT_TTL_MS, 24 * 60 * 60 * 1000);
 
   setPriceSnapshotBackendForTests(memoryPriceSnapshotBackend());

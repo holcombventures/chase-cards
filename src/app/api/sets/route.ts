@@ -13,7 +13,9 @@ import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
 import * as lorcanaCatalog from "@/lib/catalog/lorcana";
-import { LorcanaApiError } from "@/lib/catalog/lorcana";
+import * as riftboundCatalog from "@/lib/catalog/riftbound";
+import * as gundamCatalog from "@/lib/catalog/gundam";
+import { TcgcsvApiError } from "@/lib/catalog/tcgcsv";
 
 function parseCategory(request: Request): CategoryId {
   const url = new URL(request.url);
@@ -56,7 +58,11 @@ export async function GET(request: Request) {
           ? await mtgCatalog.fetchSets()
           : adapterId === "lorcana"
             ? await lorcanaCatalog.fetchSets()
-            : await pokemonCatalog.fetchSets();
+            : adapterId === "riftbound"
+              ? await riftboundCatalog.fetchSets()
+              : adapterId === "gundam"
+                ? await gundamCatalog.fetchSets()
+                : await pokemonCatalog.fetchSets();
     return NextResponse.json({
       data: sets,
       meta: { category: adapterId },
@@ -74,7 +80,7 @@ export async function GET(request: Request) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
+    if (err instanceof MtgApiError || err instanceof TcgcsvApiError) {
       return NextResponse.json(
         { error: err.message },
         {
