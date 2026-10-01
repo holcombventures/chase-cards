@@ -2,7 +2,12 @@
 
 import Image from "next/image";
 import type { CardWithPrice } from "@/lib/types";
-import { formatPrice, formatPriceLabel, formatVariant } from "@/lib/prices";
+import {
+  formatCollectorNumberLabel,
+  formatPrice,
+  formatPriceLabel,
+  formatVariant,
+} from "@/lib/prices";
 
 type Props = {
   card: CardWithPrice;
@@ -43,19 +48,6 @@ function LockIcon({ className }: { className?: string }) {
   );
 }
 
-function formatSetNumberLabel(card: CardWithPrice): string {
-  const num = card.number?.trim() || "?";
-  const printed = card.set?.printedTotal;
-  const total = card.set?.total;
-  const denom =
-    typeof printed === "number" && Number.isFinite(printed) && printed > 0
-      ? printed
-      : typeof total === "number" && Number.isFinite(total) && total > 0
-        ? total
-        : null;
-  return denom === null ? num : `${num}/${denom}`;
-}
-
 export function CardTile({
   card,
   rank,
@@ -63,7 +55,7 @@ export function CardTile({
   foil = false,
   pricePending = false,
 }: Props) {
-  const setLabel = formatSetNumberLabel(card);
+  const setLabel = formatCollectorNumberLabel(card);
   const hasPrice = card.marketPrice !== null;
   const showFoil = foil && !locked;
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { enrichCard, selectChaseCards, sortBySetNumber } from "../prices";
+import { enrichCard, formatCollectorNumberLabel, selectChaseCards, sortBySetNumber } from "../prices";
 import {
   EMPTY_ENTITLEMENTS,
   hasFullAccessInCategory,
@@ -168,6 +168,21 @@ test("parallels stay separate, reprints keep their code, and LR++ ranks first", 
   assert.ok(order.indexOf("GD05-002") < order.indexOf("GD05-067"));
   assert.ok(order.lastIndexOf("GD05-067") < order.indexOf("EXR-009"));
   assert.ok(order.indexOf("EXR-009") < order.indexOf("ST01-011"));
+});
+
+test("gundam codes display without a fake set-size denominator", () => {
+  const set = { printedTotal: 0, total: 197 };
+  assert.equal(formatCollectorNumberLabel({ number: "GD05-067", set }), "GD05-067");
+  assert.equal(formatCollectorNumberLabel({ number: "ST01-011", set }), "ST01-011");
+  assert.equal(formatCollectorNumberLabel({ number: "EXR-009", set }), "EXR-009");
+  assert.equal(
+    formatCollectorNumberLabel({ number: "189*", set: { printedTotal: 166, total: 246 } }),
+    "189*/166",
+  );
+  assert.equal(
+    formatCollectorNumberLabel({ number: "245", set: { printedTotal: 207, total: 245 } }),
+    "245/207",
+  );
 });
 
 test("gundam number sort does not change a non-gundam catalog", () => {

@@ -358,6 +358,28 @@ function scoreOnePiece(card: CardWithPrice): number {
   return score;
 }
 
+/**
+ * Label under a card. Slash totals stay for Lorcana (245/207) and Riftbound
+ * (189* /166). Gundam codes already name their set (GD05-067, ST01-011),
+ * so the catalog size is not appended as a fake denominator.
+ */
+export function formatCollectorNumberLabel(card: {
+  number?: string | null;
+  set?: { printedTotal?: number; total?: number } | null;
+}): string {
+  const num = card.number?.trim() || "?";
+  if (/^[A-Za-z]+\d*-/.test(num)) return num;
+  const printed = card.set?.printedTotal;
+  const total = card.set?.total;
+  const denom =
+    typeof printed === "number" && Number.isFinite(printed) && printed > 0
+      ? printed
+      : typeof total === "number" && Number.isFinite(total) && total > 0
+        ? total
+        : null;
+  return denom === null ? num : `${num}/${denom}`;
+}
+
 function gundamCode(number: string): { prefix: string; num: number } | null {
   const match = number.match(/^([A-Za-z]+\d*)-(\d+)$/);
   if (!match) return null;
