@@ -193,6 +193,12 @@ export function estimateChaseScore(
   if (categoryId === "lorcana") {
     return scoreLorcana(card);
   }
+  if (categoryId === "riftbound") {
+    return scoreRiftbound(card);
+  }
+  if (categoryId === "gundam") {
+    return scoreGundam(card);
+  }
   return scorePokemon(card);
 }
 
@@ -275,6 +281,48 @@ function scoreLorcana(card: CardWithPrice): number {
   return score;
 }
 
+function scoreRiftbound(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase();
+  const name = (card.name || "").toLowerCase();
+  const number = card.number || "";
+
+  if (number.includes("*") || /signature/.test(name)) score += 100;
+  else if (/overnumbered/.test(name)) score += 80;
+  else if (/^sp\d/i.test(number)) score += 60;
+  else if (/showcase/.test(rarity)) score += 45;
+  else if (/epic/.test(rarity)) score += 35;
+  else if (/rare/.test(rarity)) score += 18;
+  else if (/uncommon/.test(rarity)) score += 8;
+  else if (/common/.test(rarity)) score += 2;
+
+  if (/[a-z]$/i.test(number)) score += 12;
+
+  const printed = card.set?.printedTotal ?? 0;
+  const parsed = parseSetNumber(number);
+  if (printed > 0 && parsed.num > printed) score += 45;
+
+  return score;
+}
+
+function scoreGundam(card: CardWithPrice): number {
+  let score = 0;
+  const rarity = (card.rarity || "").toLowerCase().replace(/\s+/g, "");
+
+  if (rarity === "lr++" || /lr\+\+/.test(rarity)) score += 100;
+  else if (/lr\+/.test(rarity)) score += 80;
+  else if (/legend/.test(rarity)) score += 60;
+  else if (/c\+\+/.test(rarity) || /r\+\+/.test(rarity)) score += 50;
+  else if (/r\+/.test(rarity)) score += 40;
+  else if (/u\+/.test(rarity)) score += 24;
+  else if (/c\+/.test(rarity)) score += 16;
+  else if (/rare/.test(rarity)) score += 18;
+  else if (/uncommon/.test(rarity)) score += 8;
+  else if (/common/.test(rarity)) score += 2;
+
+  return score;
+}
+
 function scoreOnePiece(card: CardWithPrice): number {
   let score = 0;
   const rarity = (card.rarity || "").toLowerCase();
@@ -310,9 +358,74 @@ function scoreOnePiece(card: CardWithPrice): number {
   return score;
 }
 
-/** Natural-ish set number sort: "1", "2", "10", "TG01", etc. */
+/**
+ * Label under a card. Slash totals stay for Lorcana (245/207) and Riftbound
+ * (189* /166). Gundam codes already name their set (GD05-067, ST01-011),
+ * so the catalog size is not appended as a fake denominator.
+ */
+export function formatCollectorNumberLabel(card: {
+  number?: string | null;
+  set?: { printedTotal?: number; total?: number } | null;
+}): string {
+  const num = card.number?.trim() || "?";
+  if (/^[A-Za-z]+\d*-/.test(num)) return num;
+  const printed = card.set?.printedTotal;
+  const total = card.set?.total;
+  const denom =
+    typeof printed === "number" && Number.isFinite(printed) && printed > 0
+      ? printed
+      : typeof total === "number" && Number.isFinite(total) && total > 0
+        ? total
+        : null;
+  return denom === null ? num : `${num}/${denom}`;
+}
+
+function gundamCode(number: string): { prefix: string; num: number } | null {
+  const match = number.match(/^([A-Za-z]+\d*)-(\d+)$/);
+  if (!match) return null;
+  return { prefix: match[1].toUpperCase(), num: parseInt(match[2], 10) };
+}
+
+/**
+ * Natural-ish set number sort: "1", "2", "10", "TG01", etc.
+ * Gundam codes (GD05-067, ST01-011, EXR-009) sort inside that catalog only,
+ * with the set's own code first. Other catalogs keep the previous order.
+ */
 export function sortBySetNumber(cards: CardWithPrice[]): CardWithPrice[] {
+  const gundam = cards.some((card) => (card.id || "").startsWith("gundam-"));
+  let primary = "";
+  if (gundam) {
+    const counts = new Map<string, number>();
+    for (const card of cards) {
+      const parsed = gundamCode(card.number || "");
+      if (!parsed) continue;
+      counts.set(parsed.prefix, (counts.get(parsed.prefix) || 0) + 1);
+    }
+    let best = 0;
+    for (const [prefix, count] of counts) {
+      if (count > best) {
+        primary = prefix;
+        best = count;
+      }
+    }
+  }
+
   return [...cards].sort((a, b) => {
+    if (gundam) {
+      const an = gundamCode(a.number || "");
+      const bn = gundamCode(b.number || "");
+      const aBand = an ? (an.prefix === primary ? 0 : 1) : 2;
+      const bBand = bn ? (bn.prefix === primary ? 0 : 1) : 2;
+      if (aBand !== bBand) return aBand - bBand;
+      if (an && bn) {
+        if (an.prefix !== bn.prefix) return an.prefix.localeCompare(bn.prefix);
+        if (an.num !== bn.num) return an.num - bn.num;
+      }
+      return (a.number || "").localeCompare(b.number || "", undefined, {
+        numeric: true,
+      }) || (a.name || "").localeCompare(b.name || "");
+    }
+
     const an = parseSetNumber(a.number);
     const bn = parseSetNumber(b.number);
     if (an.prefix !== bn.prefix) {

@@ -12,10 +12,12 @@ import { formatPricesAsOf, selectChaseCards, sortBySetNumber } from "@/lib/price
 
 import {
   DEFAULT_CATEGORY_ID,
+  GUNDAM_FAN_NOTE,
   LIVE_CATALOG_IDS,
   LORCANA_FAN_NOTE,
   PAID_LIVE_CATALOG_IDS,
   getCategory,
+  isFreeCategory,
   isLiveCategory,
   type CategoryId,
 } from "@/lib/catalog/types";
@@ -183,7 +185,7 @@ export function ChaseApp() {
   );
 
   const buyAddonFor = useCallback(
-    async (addonCategoryId: Exclude<CategoryId, "lorcana">) => {
+    async (addonCategoryId: "pokemon" | "one-piece" | "mtg" | "sports") => {
       setCheckoutBusy(true);
       try {
         await purchaseEntitlement(addonCategoryId, {
@@ -205,7 +207,8 @@ export function ChaseApp() {
   const isPokemon = categoryId === "pokemon";
   const isOnePiece = categoryId === "one-piece";
   const isMtg = categoryId === "mtg";
-  const isLorcana = categoryId === "lorcana";
+  const isFreeCatalog = isFreeCategory(categoryId);
+  const categoryDisclaimer = category.disclaimer ?? null;
   const fullAccessHere = hasFullAccessInCategory(categoryId);
   const categoryHint = categoryEntitlementHint(entitlements, categoryId);
   const ownsThis = ownsCategory(categoryId);
@@ -659,8 +662,8 @@ export function ChaseApp() {
   const showMtgPriceNote =
     isMtg && hasPricedCards && priceSource === "scryfall";
 
-  const showLorcanaPriceNote =
-    isLorcana && hasPricedCards && priceSource === "tcgcsv";
+  const showTcgcsvPriceNote =
+    isFreeCatalog && hasPricedCards && priceSource === "tcgcsv";
 
   const unlockActions: GateAction[] = useMemo(() => {
     const actions: GateAction[] = [];
@@ -683,7 +686,7 @@ export function ChaseApp() {
     if (addonAction && isMtg && !fullAccessHere) {
       actions.push(addonAction);
     }
-    if (!isPremium && !isLorcana) {
+    if (!isPremium && !isFreeCatalog) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: () => unlockPremium(categoryId),
@@ -695,7 +698,7 @@ export function ChaseApp() {
       // Premium owned but this live category still top-3 → offer add-on
       actions.push(addonAction);
     }
-    if (!entitlements.allAccess && !isLorcana) {
+    if (!entitlements.allAccess && !isFreeCatalog) {
       actions.push({
         label: `All Access · ${ALL_ACCESS_PRICE_LABEL}`,
         onClick: unlockAllAccess,
@@ -703,7 +706,7 @@ export function ChaseApp() {
         checkoutKey: "all_access",
       });
     }
-    if (actions.length === 0 && !isLorcana) {
+    if (actions.length === 0 && !isFreeCatalog) {
       actions.push({
         label: `Premium · ${PREMIUM_PRICE_LABEL}`,
         onClick: () => unlockPremium(categoryId),
@@ -715,7 +718,7 @@ export function ChaseApp() {
     return actions;
   }, [
     isMtg,
-    isLorcana,
+    isFreeCatalog,
     isPremium,
     fullAccessHere,
     category.shortLabel,
@@ -764,25 +767,25 @@ export function ChaseApp() {
     ? "Choose set · Pokémon TCG"
     : isOnePiece
       ? "Choose set · One Piece English"
-      : isLorcana
-        ? "Choose set · Disney Lorcana"
+      : isFreeCatalog
+        ? `Choose set · ${category.label}`
         : `Choose set · ${category.shortLabel}`;
 
   const loadingSetsMessage = isPokemon
     ? "Fetching set list from the Pokémon TCG API."
     : isOnePiece
       ? "Fetching One Piece English sets."
-      : isLorcana
-        ? "Fetching Disney Lorcana sets."
-        : `Fetching ${category.label} sets.`;
+      : `Fetching ${category.label} sets.`;
 
   const loadingCardsMessage = isPokemon
     ? "Fetching cards and market prices (Pokémon TCG API, with TCGdex fallback if needed)."
     : isOnePiece
       ? "Fetching One Piece cards and USD market prices."
-      : isLorcana
+      : categoryId === "lorcana"
         ? "Fetching Lorcana cards and TCGplayer market prices."
-        : `Fetching ${category.label} cards.`;
+        : isFreeCatalog
+          ? `Fetching ${category.label} cards and TCGplayer market prices.`
+          : `Fetching ${category.label} cards.`;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-3 py-5 sm:gap-8 sm:px-6 sm:py-8 lg:px-8">
@@ -809,8 +812,8 @@ export function ChaseApp() {
           ownedIds={ownedIds}
           disabled={catalogLive && uiCardsLoading}
         />
-        {isLorcana ? (
-          <p className="text-xs leading-relaxed text-slate-400">{LORCANA_FAN_NOTE}</p>
+        {categoryDisclaimer ? (
+          <p className="text-xs leading-relaxed text-slate-400">{categoryDisclaimer}</p>
         ) : null}
       </Hero>
 
@@ -1040,7 +1043,7 @@ export function ChaseApp() {
                         </p>
                       ) : null}
                     </div>
-                    {mode === "chase" && !isLorcana ? (
+                    {mode === "chase" && !isFreeCatalog ? (
                       <div
                         className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-950/70 p-1"
                         role="status"
@@ -1093,10 +1096,10 @@ export function ChaseApp() {
                       Prices via Scryfall (USD) when provided
                     </p>
                   ) : null}
-                  {isLorcana ? (
+                  {categoryDisclaimer ? (
                     <p className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
-                      {LORCANA_FAN_NOTE}
-                      {showLorcanaPriceNote ? " Market prices are TCGplayer USD." : ""}
+                      {categoryDisclaimer}
+                      {showTcgcsvPriceNote ? " Market prices are TCGplayer USD." : ""}
                     </p>
                   ) : null}
                   {mode === "chase" && chaseMode === "estimated" && chaseNote ? (
@@ -1231,16 +1234,18 @@ export function ChaseApp() {
         >
           Scryfall
         </a>
-        . Disney Lorcana via TCGCSV (TCGplayer). {LORCANA_FAN_NOTE} Market
-        prices never invented. Not affiliated with Bandai, Nintendo, TPC, or
-        Wizards of the Coast.
+        . Disney Lorcana via TCGCSV (TCGplayer). {LORCANA_FAN_NOTE} Gundam Card
+        Game via TCGCSV (TCGplayer). {GUNDAM_FAN_NOTE} Market prices never
+        invented. Not affiliated with Bandai, Nintendo, TPC, or Wizards of the
+        Coast.
         {entitlementsReady ? (
           <>
             {" "}
             · Free: top {FREE_CHASE_LIMIT} chase on Pokémon, One Piece, and MTG
-            · Disney Lorcana is free · Premium {PREMIUM_PRICE_LABEL} (choose one
-            paid category) · Add-ons {ADDON_PRICE_LABEL} · All Access{" "}
-            {ALL_ACCESS_PRICE_LABEL} · Stripe when configured.
+            · Disney Lorcana, Riftbound, and Gundam Card Game are free · Premium{" "}
+            {PREMIUM_PRICE_LABEL} (choose one paid category) · Add-ons{" "}
+            {ADDON_PRICE_LABEL} · All Access {ALL_ACCESS_PRICE_LABEL} · Stripe
+            when configured.
           </>
         ) : null}
       </footer>

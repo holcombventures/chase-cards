@@ -37,7 +37,9 @@ import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
 import * as lorcanaCatalog from "@/lib/catalog/lorcana";
-import { LorcanaApiError } from "@/lib/catalog/lorcana";
+import * as riftboundCatalog from "@/lib/catalog/riftbound";
+import * as gundamCatalog from "@/lib/catalog/gundam";
+import { TcgcsvApiError } from "@/lib/catalog/tcgcsv";
 import {
   mergeFullBodyWithSnapshot,
   priceCacheRefreshAllowed,
@@ -359,8 +361,26 @@ async function handleOnePiece(
   });
 }
 
-async function handleLorcana(setId: string, releaseDateParam: string | null) {
-  const { cards: raw, meta: fetchMeta } = await lorcanaCatalog.fetchCards(setId);
+const TCGCSV_CATALOGS = {
+  lorcana: lorcanaCatalog,
+  riftbound: riftboundCatalog,
+  gundam: gundamCatalog,
+} as const;
+
+const TCGCSV_MOM_REASON = {
+  lorcana: "Lorcana catalog has no price-history archive",
+  riftbound: "Riftbound catalog has no price-history archive",
+  gundam: "Gundam Card Game catalog has no price-history archive",
+} as const;
+
+type TcgcsvCategoryId = keyof typeof TCGCSV_CATALOGS;
+
+async function handleTcgcsv(
+  category: TcgcsvCategoryId,
+  setId: string,
+  releaseDateParam: string | null,
+) {
+  const { cards: raw, meta: fetchMeta } = await TCGCSV_CATALOGS[category].fetchCards(setId);
   const backend: PriceSource = fetchMeta.priceBackend;
 
   const cards: CardWithPrice[] = normalizeCardsSetTotals(
@@ -382,14 +402,13 @@ async function handleLorcana(setId: string, releaseDateParam: string | null) {
     releaseDate: releaseDateParam,
     tcgdexBundle: null,
     tcgdexAttempted: false,
-    momUnavailableReason:
-      "Lorcana catalog has no price-history archive",
+    momUnavailableReason: TCGCSV_MOM_REASON[category],
   });
 
   return NextResponse.json({
     data: cards,
     meta: {
-      category: "lorcana",
+      category,
       total: cards.length,
       pricedCount,
       missingPriceCount: cards.length - pricedCount,
@@ -475,8 +494,8 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
     if (category === "mtg") {
       return await handleMtg(setId, releaseDateParam);
     }
-    if (category === "lorcana") {
-      return await handleLorcana(setId, releaseDateParam);
+    if (category === "lorcana" || category === "riftbound" || category === "gundam") {
+      return await handleTcgcsv(category, setId, releaseDateParam);
     }
     return await handlePokemon(setId, releaseDateParam, setNameParam);
   } catch (err) {
@@ -492,7 +511,7 @@ async function loadFullCardsResponse(request: Request, { params }: Params) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
+    if (err instanceof MtgApiError || err instanceof TcgcsvApiError) {
       return NextResponse.json(
         { error: err.message },
         {

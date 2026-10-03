@@ -286,7 +286,8 @@ export function EntitlementShop({
       ) : !SHOW_SPORT_ADDON_PURCHASES ? (
         <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
           Per-sport add-ons stay hidden until Sports adapters ship. Free: top 3
-          chase on Pokémon, One Piece, and MTG. Disney Lorcana stays free.
+          chase on Pokémon, One Piece, and MTG. Disney Lorcana, Riftbound, and
+          Gundam Card Game stay free.
           Premium: pick one paid category for full depth; add-ons unlock the
           others.
         </p>

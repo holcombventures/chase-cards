@@ -22,7 +22,9 @@ import { OnePieceApiError } from "@/lib/catalog/one-piece";
 import * as mtgCatalog from "@/lib/catalog/mtg";
 import { MtgApiError } from "@/lib/catalog/mtg";
 import * as lorcanaCatalog from "@/lib/catalog/lorcana";
-import { LorcanaApiError } from "@/lib/catalog/lorcana";
+import * as riftboundCatalog from "@/lib/catalog/riftbound";
+import * as gundamCatalog from "@/lib/catalog/gundam";
+import { TcgcsvApiError } from "@/lib/catalog/tcgcsv";
 import { priceCacheRefreshAllowed } from "@/lib/priceSnapshot";
 import { readFreshPriceSnapshot } from "@/lib/priceSnapshotStore";
 
@@ -138,8 +140,20 @@ export async function GET(request: Request, { params }: Params) {
       });
     }
 
-    if (category === "lorcana") {
-      const { cards: raw, meta: fetchMeta } = await lorcanaCatalog.fetchCards(setId);
+    if (category === "lorcana" || category === "riftbound" || category === "gundam") {
+      const catalog =
+        category === "lorcana"
+          ? lorcanaCatalog
+          : category === "riftbound"
+            ? riftboundCatalog
+            : gundamCatalog;
+      const momUnavailableReason =
+        category === "lorcana"
+          ? "Lorcana catalog has no price-history archive"
+          : category === "riftbound"
+            ? "Riftbound catalog has no price-history archive"
+            : "Gundam Card Game catalog has no price-history archive";
+      const { cards: raw, meta: fetchMeta } = await catalog.fetchCards(setId);
       const backend: PriceSource = fetchMeta.priceBackend;
       const cards: CardWithPrice[] = raw.map((card) => {
         const enriched = enrichCard(card);
@@ -155,8 +169,7 @@ export async function GET(request: Request, { params }: Params) {
         cards,
         priceSource,
         releaseDate: releaseDateParam,
-        momUnavailableReason:
-          "Lorcana catalog has no price-history archive",
+        momUnavailableReason,
       });
       return NextResponse.json({
         data: stats,
@@ -350,7 +363,7 @@ export async function GET(request: Request, { params }: Params) {
         { status: err.status === 429 ? 429 : 502 },
       );
     }
-    if (err instanceof MtgApiError || err instanceof LorcanaApiError) {
+    if (err instanceof MtgApiError || err instanceof TcgcsvApiError) {
       return NextResponse.json(
         { error: err.message },
         {
