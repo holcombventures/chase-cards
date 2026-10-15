@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { formatPrice, formatPricesAsOf } from "@/lib/prices";
 import {
+  BOX_EV_SOURCES,
   boxEvVerdict,
   boxPriceRatio,
   classifyCard,
@@ -213,8 +214,9 @@ function BoxEvForm({
       <section className="space-y-2 text-sm leading-relaxed text-slate-300">
         <h2 className="text-base font-semibold text-white">Assumptions</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>There is no feed for sealed box price, pack count, pull rates, or odds. Every one of those fields is an estimate.</li>
-          <li>Each priced card in a rarity is treated as equally likely. Cards with no market price are left out of that rarity&apos;s average.</li>
+          <li>Box price, pack count, and pull rates start from public pack notes and opening write-ups. They are still estimates. Edit them.</li>
+          <li>Each priced card in a slot is treated as equally likely. Chase printings stay in their own slot, so a signed or iconic card is not averaged into a common rarity. Cards with no market price are left out of that slot&apos;s average.</li>
+          <li>{BOX_EV_SOURCES[category]}</li>
           <li>Hits per box = hits per pack × packs per box. Slot EV = average live price × hits per box.</li>
           <li>Modeled EV is the sum of the slot EVs. It is not a promise of what a box opens.</li>
           <li>Good buy if the box price is 85% or less of modeled EV. Fair up to 110%. Overpriced above 110%.</li>

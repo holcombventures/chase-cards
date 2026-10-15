@@ -2,6 +2,46 @@
  * Modeled booster-box EV.
  * Box price, pack count, and per-rarity pull rates are estimates the visitor
  * edits. Nothing here is an official odd or a market quote for a sealed box.
+ *
+ * Default rates are starting points from public pack structures and opening
+ * notes, not a sealed-product feed. Chase printings (Iconic, manga, signed,
+ * LR++) are their own slots so they are not averaged into a common rarity
+ * and then multiplied by that rarity's pull rate.
+ *
+ * Sources:
+ * - Pokémon: TCGplayer Infinite, "Pokémon TCG: Pitch Black Pull Rates"
+ *   (https://www.tcgplayer.com/content/article/Pokémon-TCG-Pitch-Black-Pull-Rates/069a5fda-2d1f-44a1-97de-b6dcdc5abfb8/).
+ *   Double Rare ~1 in 5, Ultra Rare ~1 in 12, Illustration Rare ~1 in 9,
+ *   Special Illustration Rare ~1 in 80, Mega Hyper Rare ~1 in 1,081.
+ *   Commons and uncommons follow the Scarlet & Violet pack (4 and 3) from
+ *   TCGplayer's Scarlet & Violet pull-rate article. 36 packs per box.
+ *   ACE SPEC ~1 per box only matters for sets that have those cards.
+ * - Lorcana: Ravensburger lists 12 cards (6 common, 3 uncommon, 2 rare or
+ *   higher, 1 foil) and 24 packs per box. Legendary ~6 per box and Epic ~2
+ *   per box follow the Attack of the Vine! opening notes at
+ *   https://tcgtalk.com/guides/attack-of-the-vine-pull-rates (9 boxes; the
+ *   author flags creator skew). Enchanted ~1 in 96 packs is the long-running
+ *   community figure summarized by Cambridge TCG
+ *   (https://www.cambridgetcg.com/pulls/lorcana). Iconic ~1 in 1,600 packs is
+ *   the r/Lorcana Fabled case tracker, which trusted case openings over
+ *   self-reported boxes (https://www.reddit.com/r/Lorcana/comments/1njnhso/).
+ * - One Piece: no Bandai odds. Community box maps (r/OnePieceTCG primer
+ *   https://www.reddit.com/r/OnePieceTCG/comments/1jgnfii/) put a 24-pack
+ *   box near 8 base leaders, 7 super rares, ~2 rares in the rare slots, and
+ *   2–3 alternate-art hits. Manga and super alternates are not in that
+ *   regular hit map; this model gives that whole case-hit group about one
+ *   card per 12-box case. Box toppers are left out of booster EV.
+ * - Riftbound: Riot, "Collectability in Riftbound: Origins"
+ *   (https://playriftbound.com/en-us/news/announcements/collectability-in-riftbound-origins/)
+ *   and the Origins sell sheet: 7 commons, 3 uncommons, 2 rare-or-better,
+ *   24 packs. Epic ~1 in 4 packs, alt-art ~2 per box, overnumbered ~1 per 3
+ *   boxes, signed overnumbered ~1 in 720 packs (about 1 in 10 overnumbered).
+ * - Gundam: Bandai publishes no odds. Retailer pack notes used here are 6
+ *   common, 4 uncommon, 2 rare-or-better, 24 packs (Cambridge TCG
+ *   https://cambridgetcg.com/pulls/gundam). GD04/GD05 opening roundups put
+ *   Legend Rare near 8 per box, LR+ and R+ near 1–2 per box, Link Rare near
+ *   4 in GD05, SP near 1 in 5 boxes, and LR++ near one per 12-box case or
+ *   rarer (https://tcgtalk.com/guides/freedom-ascension-pull-rates).
  */
 
 import type { ToolCategoryId } from "./categories";
@@ -56,67 +96,87 @@ const POKEMON_SLOTS: RaritySlot[] = [
   { id: "common", label: "Common", hitsPerPack: 4 },
   { id: "uncommon", label: "Uncommon", hitsPerPack: 3 },
   { id: "rare", label: "Rare", hitsPerPack: 0.5 },
-  { id: "double-rare", label: "Double Rare", hitsPerPack: 0.3 },
-  { id: "ultra-rare", label: "Ultra Rare", hitsPerPack: 0.15 },
-  { id: "illustration-rare", label: "Illustration Rare", hitsPerPack: 0.08 },
-  { id: "special-illustration-rare", label: "Special Illustration Rare", hitsPerPack: 0.03 },
-  { id: "hyper-rare", label: "Hyper Rare", hitsPerPack: 0.01 },
-  { id: "ace-spec", label: "ACE SPEC", hitsPerPack: 0.03 },
-  { id: "secret", label: "Secret Rare", hitsPerPack: 0.01 },
+  { id: "double-rare", label: "Double Rare", hitsPerPack: 0.21 },
+  { id: "ultra-rare", label: "Ultra Rare", hitsPerPack: 0.083 },
+  { id: "illustration-rare", label: "Illustration Rare", hitsPerPack: 0.11 },
+  { id: "special-illustration-rare", label: "Special Illustration Rare", hitsPerPack: 0.0125 },
+  { id: "hyper-rare", label: "Hyper Rare", hitsPerPack: 0.0009 },
+  { id: "ace-spec", label: "ACE SPEC", hitsPerPack: 0.028 },
+  { id: "secret", label: "Secret Rare", hitsPerPack: 0.02 },
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
 const ONE_PIECE_SLOTS: RaritySlot[] = [
-  { id: "common", label: "Common", hitsPerPack: 5 },
+  { id: "common", label: "Common", hitsPerPack: 6 },
   { id: "uncommon", label: "Uncommon", hitsPerPack: 3 },
-  { id: "rare", label: "Rare", hitsPerPack: 1.5 },
-  { id: "super-rare", label: "Super Rare", hitsPerPack: 0.25 },
-  { id: "secret", label: "Secret Rare", hitsPerPack: 0.04 },
-  { id: "leader", label: "Leader", hitsPerPack: 0.04 },
-  { id: "special", label: "Special / alt", hitsPerPack: 0.02 },
+  { id: "rare", label: "Rare", hitsPerPack: 1.6 },
+  { id: "super-rare", label: "Super Rare", hitsPerPack: 7 / 24 },
+  { id: "leader", label: "Leader", hitsPerPack: 8 / 24 },
+  { id: "secret", label: "Secret Rare", hitsPerPack: 0.5 / 24 },
+  { id: "alt", label: "Alternate art", hitsPerPack: 2.25 / 24 },
+  { id: "case-hit", label: "Manga / super alt", hitsPerPack: 1 / (12 * 24) },
+  { id: "sp", label: "Special", hitsPerPack: 2 / (12 * 24) },
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
 const LORCANA_SLOTS: RaritySlot[] = [
   { id: "common", label: "Common", hitsPerPack: 6 },
   { id: "uncommon", label: "Uncommon", hitsPerPack: 3 },
-  { id: "rare", label: "Rare", hitsPerPack: 1.2 },
-  { id: "super-rare", label: "Super Rare", hitsPerPack: 0.4 },
-  { id: "legendary", label: "Legendary", hitsPerPack: 0.2 },
-  { id: "epic", label: "Epic", hitsPerPack: 0.06 },
-  { id: "enchanted", label: "Enchanted", hitsPerPack: 0.01 },
-  { id: "iconic", label: "Iconic", hitsPerPack: 0.005 },
+  { id: "rare", label: "Rare", hitsPerPack: 0.85 },
+  { id: "super-rare", label: "Super Rare", hitsPerPack: 0.9 },
+  { id: "legendary", label: "Legendary", hitsPerPack: 0.25 },
+  { id: "epic", label: "Epic", hitsPerPack: 2 / 24 },
+  { id: "enchanted", label: "Enchanted", hitsPerPack: 1 / 96 },
+  { id: "iconic", label: "Iconic", hitsPerPack: 1 / 1600 },
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
 const RIFTBOUND_SLOTS: RaritySlot[] = [
-  { id: "common", label: "Common", hitsPerPack: 5 },
+  { id: "common", label: "Common", hitsPerPack: 7 },
   { id: "uncommon", label: "Uncommon", hitsPerPack: 3 },
-  { id: "rare", label: "Rare", hitsPerPack: 1 },
-  { id: "epic", label: "Epic", hitsPerPack: 0.15 },
-  { id: "showcase", label: "Showcase", hitsPerPack: 0.08 },
-  { id: "signature", label: "Signature", hitsPerPack: 0.01 },
+  { id: "rare", label: "Rare", hitsPerPack: 1.75 },
+  { id: "epic", label: "Epic", hitsPerPack: 0.25 },
+  { id: "alt-art", label: "Alt art", hitsPerPack: 2 / 24 },
+  { id: "overnumbered", label: "Overnumbered", hitsPerPack: 1 / (3 * 24) },
+  { id: "signature", label: "Signature", hitsPerPack: 1 / 720 },
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
 const GUNDAM_SLOTS: RaritySlot[] = [
   { id: "common", label: "Common", hitsPerPack: 6 },
-  { id: "uncommon", label: "Uncommon", hitsPerPack: 2.5 },
-  { id: "rare", label: "Rare", hitsPerPack: 1 },
-  { id: "c-plus", label: "C+", hitsPerPack: 0.3 },
-  { id: "u-plus", label: "U+", hitsPerPack: 0.15 },
-  { id: "r-plus", label: "R+", hitsPerPack: 0.1 },
-  { id: "legend", label: "Legend Rare", hitsPerPack: 0.08 },
-  { id: "lr", label: "LR / LR+ / LR++", hitsPerPack: 0.02 },
+  { id: "uncommon", label: "Uncommon", hitsPerPack: 4 },
+  { id: "rare", label: "Rare", hitsPerPack: 1.3 },
+  { id: "legend", label: "Legend Rare", hitsPerPack: 8 / 24 },
+  { id: "lr-plus", label: "LR+", hitsPerPack: 1.5 / 24 },
+  { id: "r-plus", label: "R+", hitsPerPack: 1.5 / 24 },
+  { id: "link", label: "Link Rare", hitsPerPack: 4 / 24 },
+  { id: "c-plus", label: "C+", hitsPerPack: 1 / 24 },
+  { id: "u-plus", label: "U+", hitsPerPack: 0.5 / 24 },
+  { id: "sp", label: "SP", hitsPerPack: 0.2 / 24 },
+  { id: "lr-plus-plus", label: "LR++", hitsPerPack: 1 / (12 * 24) },
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
 export const BOX_EV_DEFAULTS: Record<ToolCategoryId, BoxEvDefaults> = {
-  pokemon: { packsPerBox: 36, boxPrice: 120, slots: POKEMON_SLOTS },
-  "one-piece": { packsPerBox: 24, boxPrice: 95, slots: ONE_PIECE_SLOTS },
-  lorcana: { packsPerBox: 24, boxPrice: 110, slots: LORCANA_SLOTS },
+  pokemon: { packsPerBox: 36, boxPrice: 180, slots: POKEMON_SLOTS },
+  "one-piece": { packsPerBox: 24, boxPrice: 120, slots: ONE_PIECE_SLOTS },
+  lorcana: { packsPerBox: 24, boxPrice: 150, slots: LORCANA_SLOTS },
   riftbound: { packsPerBox: 24, boxPrice: 140, slots: RIFTBOUND_SLOTS },
-  gundam: { packsPerBox: 24, boxPrice: 90, slots: GUNDAM_SLOTS },
+  gundam: { packsPerBox: 24, boxPrice: 120, slots: GUNDAM_SLOTS },
+};
+
+/** Short citation shown under the calculator for the selected game. */
+export const BOX_EV_SOURCES: Record<ToolCategoryId, string> = {
+  pokemon:
+    "Defaults follow TCGplayer Infinite's Pitch Black rates (about 1 Double Rare in 5 packs, 1 Ultra Rare in 12, 1 Illustration Rare in 9, 1 Special Illustration Rare in 80, 1 Mega Hyper Rare in 1,081) and the Scarlet & Violet pack of 4 commons, 3 uncommons, and 36 packs. ACE SPEC is about 1 per box on sets that have them.",
+  "one-piece":
+    "Defaults follow community 24-pack box maps: about 8 base leaders, 7 super rares, and 2–3 alternate arts. Manga and super alternates share about one pull per 12-box case. Box toppers are not counted. Bandai does not publish odds.",
+  lorcana:
+    "Ravensburger's pack is 6 common, 3 uncommon, 2 rare-or-higher, and 1 foil, with 24 packs in a box. Legendary is about 6 per box and Epic about 2, from Attack of the Vine! openings. Enchanted is about 1 in 96 packs. Iconic is about 1 in 1,600 packs, from the r/Lorcana Fabled case tracker.",
+  riftbound:
+    "Defaults follow Riot's Origins notes: 7 commons, 3 uncommons, an Epic in about 1 of 4 packs, about 2 alt-arts per 24-pack box, an overnumbered card about 1 box in 3, and a signed card about 1 in 720 packs.",
+  gundam:
+    "Pack shape used here is 6 common, 4 uncommon, and 2 rare-or-better, 24 packs. Community GD04 and GD05 openings put Legend Rare near 8 per box, LR+ and R+ near 1–2, Link Rare near 4, SP near 1 in 5 boxes, and LR++ near one per 12-box case or rarer. Bandai does not publish odds.",
 };
 
 export function cloneBoxDefaults(category: ToolCategoryId): BoxEvDefaults {
@@ -156,20 +216,29 @@ function classifyPokemon(card: EvCard): string {
   return "other";
 }
 
+function onePieceFinish(name: string): "topper" | "case-hit" | "alt" | "base" {
+  const text = name.toLowerCase();
+  if (text.includes("box topper")) return "topper";
+  if (text.includes("manga") || /super\s+(alternate|leader|parallel)/.test(text)) return "case-hit";
+  if (text.includes("alternate art") || text.includes("parallel")) return "alt";
+  return "base";
+}
+
 function classifyOnePiece(card: EvCard): string {
+  const finish = onePieceFinish(card.name || "");
+  if (finish === "topper") return "other";
+  if (finish === "case-hit") return "case-hit";
+  if (finish === "alt") return "alt";
   const rarity = (card.rarity || "").trim().toLowerCase();
-  const name = (card.name || "").toLowerCase();
   const token = rarity.replace(/[^a-z0-9]+/g, "");
+  if (token === "sp" || rarity === "special") return "sp";
+  if (token === "tr" || /treasure/.test(rarity)) return "other";
   if (token === "l" || /leader/.test(rarity)) return "leader";
-  if (token === "sp" || /special/.test(rarity) || /manga/.test(rarity) || /manga/.test(name)) {
-    return "special";
-  }
   if (token === "sec" || /secret/.test(rarity)) return "secret";
   if (token === "sr" || /super/.test(rarity)) return "super-rare";
   if (token === "uc" || /uncommon/.test(rarity)) return "uncommon";
   if (token === "c" || rarity === "common") return "common";
   if (token === "r" || rarity === "rare") return "rare";
-  if (/alt(?:ernate)?\s*art/.test(name)) return "special";
   return "other";
 }
 
@@ -188,10 +257,18 @@ function classifyLorcana(card: EvCard): string {
 
 function classifyRiftbound(card: EvCard): string {
   const name = (card.name || "").toLowerCase();
-  const number = card.number || "";
+  const number = (card.number || "").toLowerCase();
   const rarity = (card.rarity || "").toLowerCase();
   if (number.includes("*") || /signature/.test(name)) return "signature";
-  if (/showcase/.test(rarity) || /overnumbered|alternate art/.test(name)) return "showcase";
+  if (/overnumbered/.test(name)) return "overnumbered";
+  if (
+    rarity === "showcase" ||
+    /alternate art/.test(name) ||
+    /^sp\d/.test(number) ||
+    /^r\d+a$/.test(number.replace(/\s/g, ""))
+  ) {
+    return "alt-art";
+  }
   if (/epic/.test(rarity)) return "epic";
   if (/uncommon/.test(rarity)) return "uncommon";
   if (/common/.test(rarity)) return "common";
@@ -201,11 +278,15 @@ function classifyRiftbound(card: EvCard): string {
 
 function classifyGundam(card: EvCard): string {
   const rarity = (card.rarity || "").toLowerCase().replace(/\s+/g, "");
-  if (rarity.includes("lr")) return "lr";
+  const name = (card.name || "").toLowerCase();
+  if (name.includes("(sp)")) return "sp";
+  if (rarity.includes("lr++") || name.includes("lr++")) return "lr-plus-plus";
+  if (rarity.includes("lr+") || name.includes("lr+")) return "lr-plus";
+  if (name.includes("link rare")) return "link";
+  if (rarity.includes("r+") || name.includes("(r+)")) return "r-plus";
+  if (rarity.includes("u+") || name.includes("(u+)")) return "u-plus";
+  if (rarity.includes("c+") || name.includes("(c+)")) return "c-plus";
   if (/legend/.test(rarity)) return "legend";
-  if (rarity === "r+" || rarity.includes("r+")) return "r-plus";
-  if (rarity === "u+" || rarity.includes("u+")) return "u-plus";
-  if (rarity === "c+" || rarity.includes("c+")) return "c-plus";
   if (/uncommon/.test(rarity) || rarity === "u") return "uncommon";
   if (/common/.test(rarity) || rarity === "c") return "common";
   if (/rare/.test(rarity) || rarity === "r") return "rare";

@@ -97,6 +97,8 @@ test("rarity buckets stay inside each game's editable slots", () => {
       card({ id: "o3", rarity: "L", marketPrice: 1 }),
       card({ id: "o4", rarity: "C", marketPrice: 1 }),
       card({ id: "o5", rarity: "SP", name: "Shanks", marketPrice: 1 }),
+      card({ id: "o6", rarity: "R", name: "Nami (Parallel)", marketPrice: 1 }),
+      card({ id: "o7", rarity: "SR", name: "Shanks (Manga)", marketPrice: 1 }),
     ],
     lorcana: [
       card({ id: "l1", rarity: "Enchanted", marketPrice: 1 }),
@@ -114,6 +116,7 @@ test("rarity buckets stay inside each game's editable slots", () => {
       card({ id: "g2", rarity: "Legend Rare", marketPrice: 1 }),
       card({ id: "g3", rarity: "C+", marketPrice: 1 }),
       card({ id: "g4", rarity: "Common", marketPrice: 1 }),
+      card({ id: "g5", rarity: "C+", name: "EX Resource (C+) (SP)", marketPrice: 1 }),
     ],
   };
 
@@ -130,6 +133,45 @@ test("rarity buckets stay inside each game's editable slots", () => {
 
   assert.equal(classifyCard("pokemon", card({ id: "sir", rarity: "Special Illustration Rare", marketPrice: 1 })), "special-illustration-rare");
   assert.equal(classifyCard("riftbound", card({ id: "sig", name: "Zed (Signature)", number: "1*", rarity: "Showcase", marketPrice: 1 })), "signature");
-  assert.equal(classifyCard("gundam", card({ id: "lr", rarity: "LR+", marketPrice: 1 })), "lr");
+  assert.equal(classifyCard("riftbound", card({ id: "over", name: "Akali (Overnumbered)", number: "189", rarity: "Showcase", marketPrice: 1 })), "overnumbered");
+  assert.equal(classifyCard("gundam", card({ id: "lr", rarity: "LR+", marketPrice: 1 })), "lr-plus");
+  assert.equal(classifyCard("gundam", card({ id: "sp", rarity: "C+", name: "EX Resource (C+) (SP)", marketPrice: 1 })), "sp");
   assert.equal(classifyCard("one-piece", card({ id: "c", rarity: "C", name: "Rare Animal", marketPrice: 1 })), "common");
+  assert.equal(classifyCard("one-piece", card({ id: "aa", rarity: "R", name: "Nami (Parallel)", marketPrice: 1 })), "alt");
+  assert.equal(classifyCard("one-piece", card({ id: "manga", rarity: "SEC", name: "Shanks (Manga)", marketPrice: 1 })), "case-hit");
+  assert.equal(classifyCard("one-piece", card({ id: "top", rarity: "C", name: "Alvida (Box Topper)", marketPrice: 1 })), "other");
+});
+
+test("chase printings are not given a common slot's pull rate", () => {
+  const lorcana = BOX_EV_DEFAULTS.lorcana;
+  const iconic = lorcana.slots.find((slot) => slot.id === "iconic");
+  assert.ok(iconic);
+  assert.ok(iconic.hitsPerPack * lorcana.packsPerBox < 0.05, "iconic stays under one per 20 boxes");
+
+  const cards = [card({ id: "icon", rarity: "Iconic", name: "Belle & Beast (Iconic)", marketPrice: 1800 })];
+  const model = modelBoxEv({
+    cards,
+    packsPerBox: lorcana.packsPerBox,
+    slots: lorcana.slots,
+    classify: (item) => classifyCard("lorcana", item),
+  });
+  const iconicEv = model.rows.find((row) => row.id === "iconic")?.slotEv ?? 0;
+  assert.ok(iconicEv < 40, `iconic slot EV was ${iconicEv}`);
+
+  const piece = BOX_EV_DEFAULTS["one-piece"];
+  const caseHit = piece.slots.find((slot) => slot.id === "case-hit");
+  assert.ok(caseHit);
+  assert.ok(caseHit.hitsPerPack * piece.packsPerBox <= 1 / 12 + 1e-9);
+
+  const rift = BOX_EV_DEFAULTS.riftbound;
+  const signature = rift.slots.find((slot) => slot.id === "signature");
+  assert.ok(signature);
+  assert.ok(signature.hitsPerPack * rift.packsPerBox < 0.05);
+
+  const gundam = BOX_EV_DEFAULTS.gundam;
+  const grail = gundam.slots.find((slot) => slot.id === "lr-plus-plus");
+  assert.ok(grail);
+  assert.ok(grail.hitsPerPack * gundam.packsPerBox <= 1 / 12 + 1e-9);
+  const sp = gundam.slots.find((slot) => slot.id === "sp");
+  assert.ok(sp && sp.hitsPerPack * gundam.packsPerBox < 0.5);
 });
