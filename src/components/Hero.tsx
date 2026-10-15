@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { CardWithPrice } from "@/lib/types";
 import { formatPrice, formatPriceLabel } from "@/lib/prices";
 import {
@@ -182,9 +183,17 @@ export function Hero({
     <header className="space-y-6 sm:space-y-8">
       {/* Nav row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-base font-bold tracking-tight text-white sm:text-lg">
-          Chase Cards
-        </p>
+        <div className="flex items-center gap-4">
+          <p className="text-base font-bold tracking-tight text-white sm:text-lg">
+            Chase Cards
+          </p>
+          <Link
+            href="/tools"
+            className="text-sm font-semibold text-slate-300 underline-offset-2 hover:text-amber-200 hover:underline"
+          >
+            Tools
+          </Link>
+        </div>
         {entitlementsReady ? (
           <div className="flex flex-wrap items-center gap-2">
             {badge ? (

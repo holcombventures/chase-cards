@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test src/lib/tools/*.test.ts src/lib/*.test.ts src/lib/catalog/*.test.ts src/lib/stripe/*.test.ts"
   },
   "dependencies": {
     "@netlify/blobs": "^11.1.0",
@@ -23,6 +24,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
