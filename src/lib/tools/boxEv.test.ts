@@ -33,7 +33,7 @@ test("box verdict uses 85% and 110% of modeled EV", () => {
   assert.equal(boxPriceRatio(10, 0), null);
 });
 
-test("modeled EV is average price times hits per pack times packs", () => {
+test("modeled EV is the median price times hits per pack times packs", () => {
   const cards = [
     card({ id: "a", rarity: "Common", marketPrice: 1 }),
     card({ id: "b", rarity: "Common", marketPrice: 3 }),
@@ -53,7 +53,7 @@ test("modeled EV is average price times hits per pack times packs", () => {
   const common = model.rows.find((row) => row.id === "common");
   const illustration = model.rows.find((row) => row.id === "illustration-rare");
   assert.equal(common?.pricedCount, 2);
-  assert.equal(common?.averagePrice, 2);
+  assert.equal(common?.typicalPrice, 2);
   assert.equal(common?.hitsPerBox, 20);
   assert.equal(common?.slotEv, 40);
   assert.equal(illustration?.pricedCount, 1);
@@ -61,6 +61,53 @@ test("modeled EV is average price times hits per pack times packs", () => {
   assert.equal(illustration?.slotEv, 200);
   assert.equal(model.modeledEv, 240);
   assert.equal(model.pricedCards, 3);
+});
+
+test("one extreme price does not set the typical price of a slot", () => {
+  const cards = [
+    card({ id: "a", rarity: "Common", marketPrice: 1 }),
+    card({ id: "b", rarity: "Common", marketPrice: 1 }),
+    card({ id: "c", rarity: "Common", marketPrice: 1 }),
+    card({ id: "d", rarity: "Common", marketPrice: 1 }),
+    card({ id: "e", rarity: "Common", marketPrice: 1000 }),
+  ];
+  const model = modelBoxEv({
+    cards,
+    packsPerBox: 10,
+    slots: [{ id: "common", label: "Common", hitsPerPack: 2 }],
+    classify: (item) => classifyCard("pokemon", item),
+  });
+  const common = model.rows.find((row) => row.id === "common");
+  assert.equal(common?.typicalPrice, 1);
+  assert.equal(common?.slotEv, 20);
+  assert.equal(model.modeledEv, 20);
+});
+
+test("cited hit counts stay at one copy of the published rate", () => {
+  function hits(category: keyof typeof BOX_EV_DEFAULTS, slotId: string): number {
+    const defaults = BOX_EV_DEFAULTS[category];
+    const slot = defaults.slots.find((item) => item.id === slotId);
+    assert.ok(slot);
+    return slot.hitsPerPack * defaults.packsPerBox;
+  }
+  assert.ok(Math.abs(hits("pokemon", "special-illustration-rare") - 36 / 80) < 1e-9);
+  assert.ok(Math.abs(hits("pokemon", "hyper-rare") - 36 / 1081) < 0.002);
+  assert.ok(Math.abs(hits("lorcana", "common") - 6 * 24) < 1e-9);
+  assert.ok(Math.abs(hits("lorcana", "enchanted") - 24 / 96) < 1e-9);
+  assert.ok(Math.abs(hits("lorcana", "iconic") - 24 / 1600) < 1e-9);
+  assert.ok(Math.abs(hits("one-piece", "leader") - 8) < 1e-9);
+  assert.ok(Math.abs(hits("one-piece", "super-rare") - 7) < 1e-9);
+  assert.ok(Math.abs(hits("one-piece", "alt") - 2.25) < 1e-9);
+  assert.ok(Math.abs(hits("one-piece", "case-hit") - 1 / 12) < 1e-9);
+  assert.ok(Math.abs(hits("riftbound", "common") - 7 * 24) < 1e-9);
+  assert.ok(Math.abs(hits("riftbound", "epic") - 0.25 * 24) < 1e-9);
+  assert.ok(Math.abs(hits("riftbound", "alt-art") - 2) < 1e-9);
+  assert.ok(Math.abs(hits("riftbound", "overnumbered") - 1 / 3) < 1e-9);
+  assert.ok(Math.abs(hits("riftbound", "signature") - 24 / 720) < 1e-9);
+  assert.ok(Math.abs(hits("gundam", "common") - 6 * 24) < 1e-9);
+  assert.ok(Math.abs(hits("gundam", "legend") - 8) < 1e-9);
+  assert.ok(Math.abs(hits("gundam", "sp") - 0.2) < 1e-9);
+  assert.ok(Math.abs(hits("gundam", "lr-plus-plus") - 1 / 12) < 1e-9);
 });
 
 test("a zero hit rate and a zero pack count add nothing", () => {

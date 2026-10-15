@@ -7,6 +7,7 @@
  */
 
 import type { PokemonCard, PokemonSet } from "@/lib/types";
+import { selectSealedBoosterBox } from "./sealedBox";
 
 export const TCGCSV_BASE = "https://tcgcsv.com";
 
@@ -26,6 +27,9 @@ export type TcgcsvPriceBackend = typeof FAN_PRICE_BACKEND;
 
 export type TcgcsvFetchMeta = {
   priceBackend: TcgcsvPriceBackend;
+  /** TCGplayer market for a sealed booster box or display in this group. */
+  sealedBoxMarket?: number | null;
+  sealedBoxName?: string | null;
 };
 
 export class TcgcsvApiError extends Error {
@@ -131,6 +135,56 @@ async function paceRequest(): Promise<void> {
 
 export function resetTcgcsvRequestPaceForTests(): void {
   nextRequestAt = 0;
+}
+
+/** Paced JSON GET. Shared by the sealed-box lookup so it does not stampede. */
+export async function fetchTcgcsvJson(url: string, userAgent: string): Promise<unknown> {
+  await paceRequest();
+  const retries = 3;
+  let lastStatus = 0;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          Accept: "application/json, text/plain;q=0.9",
+          "User-Agent": userAgent,
+        },
+        cache: "no-store",
+      });
+    } catch {
+      if (attempt < retries) {
+        await sleep(400 * attempt);
+        continue;
+      }
+      throw new TcgcsvApiError("TCGCSV network error.", 502);
+    }
+
+    lastStatus = res.status;
+    const body = await res.text();
+    if (res.status === 429 && attempt < retries) {
+      await sleep(500 * attempt);
+      continue;
+    }
+    if (res.ok) {
+      try {
+        return JSON.parse(body) as unknown;
+      } catch {
+        throw new TcgcsvApiError("TCGCSV returned invalid JSON.", 502);
+      }
+    }
+    if ((res.status >= 500 || res.status === 408) && attempt < retries) {
+      await sleep(400 * attempt);
+      continue;
+    }
+    throw new TcgcsvApiError(
+      `TCGCSV error (${res.status}).`,
+      res.status === 404 ? 404 : res.status === 429 ? 429 : 502,
+    );
+  }
+
+  throw new TcgcsvApiError(`TCGCSV error (${lastStatus || "network"}).`, lastStatus || 502);
 }
 
 function asFinitePrice(value: unknown): number | null {
@@ -734,9 +788,14 @@ export function createTcgcsvAdapter(config: TcgcsvAdapterConfig) {
       }
     }
     const cards = buildTcgcsvCards({ group, products, prices }, config);
+    const sealed = selectSealedBoosterBox(products, prices);
     return {
       cards,
-      meta: { priceBackend: FAN_PRICE_BACKEND },
+      meta: {
+        priceBackend: FAN_PRICE_BACKEND,
+        sealedBoxMarket: sealed?.marketPrice ?? null,
+        sealedBoxName: sealed?.name ?? null,
+      },
     };
   }
 

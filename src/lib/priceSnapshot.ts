@@ -148,6 +148,10 @@ export function mergeFullBodyWithSnapshot(
       fallbackUsed: snap.meta.fallbackUsed,
       usedOptcgKey: snap.meta.usedOptcgKey,
       priceBackend: snap.meta.priceBackend,
+      sealedBoxMarket:
+        "sealedBoxMarket" in snap.meta ? snap.meta.sealedBoxMarket : body.meta?.sealedBoxMarket,
+      sealedBoxName:
+        "sealedBoxName" in snap.meta ? snap.meta.sealedBoxName : body.meta?.sealedBoxName,
       stats: snap.meta.stats ?? body.meta?.stats,
       releaseDate: snap.meta.releaseDate ?? body.meta?.releaseDate,
       pricesAsOf: snap.pricesAsOf,

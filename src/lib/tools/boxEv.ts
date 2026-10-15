@@ -1,12 +1,22 @@
 /**
  * Modeled booster-box EV.
- * Box price, pack count, and per-rarity pull rates are estimates the visitor
- * edits. Nothing here is an official odd or a market quote for a sealed box.
+ * Pack count and per-rarity pull rates are estimates the visitor edits.
+ * The starting box price is the TCGplayer market for a sealed booster box
+ * or display when that SKU is in the same TCGCSV category feed. Otherwise
+ * it is a placeholder. Either way the visitor can change it. Nothing here
+ * is an official odd.
+ *
+ * Each slot uses the median of its priced cards, not the arithmetic mean.
+ * A mean is the right expectation only when every printing in the slot is
+ * equally likely. One $1,000 alternate in a slot of much cheaper printings
+ * is not, and it was pulling One Piece, Gundam, and Riftbound to 2–4× the
+ * box. Even counts take the mean of the two central prices.
  *
  * Default rates are starting points from public pack structures and opening
- * notes, not a sealed-product feed. Chase printings (Iconic, manga, signed,
- * LR++) are their own slots so they are not averaged into a common rarity
- * and then multiplied by that rarity's pull rate.
+ * notes. Chase printings (Iconic, manga, signed, LR++) are their own slots
+ * so they are not priced as if they were commons. A second pass checked
+ * these per-box counts against the sources below and left them there:
+ * the gap was the mean and the placeholder box price, not a doubled hit.
  *
  * Sources:
  * - Pokémon: TCGplayer Infinite, "Pokémon TCG: Pitch Black Pull Rates"
@@ -70,7 +80,10 @@ export type RaritySlot = {
 
 export type BoxEvDefaults = {
   packsPerBox: number;
-  /** Editable street-price guess. There is no sealed-box feed. */
+  /**
+   * Placeholder street price, used only when the sealed-box market is missing.
+   * The calculator replaces it with the TCGplayer market when TCGCSV has one.
+   */
   boxPrice: number;
   slots: RaritySlot[];
 };
@@ -82,7 +95,8 @@ export type BoxEvRow = {
   hitsPerBox: number;
   cardCount: number;
   pricedCount: number;
-  averagePrice: number | null;
+  /** Median market price of priced cards in this slot. */
+  typicalPrice: number | null;
   slotEv: number;
 };
 
@@ -297,6 +311,22 @@ function usablePrice(value: number | null): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+/**
+ * Median of the prices a slot actually has. Even counts use the mean of the
+ * two central values, so two prices of 1 and 3 still land on 2.
+ */
+export function medianPrice(values: readonly number[]): number | null {
+  const sorted: number[] = [];
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) sorted.push(value);
+  }
+  if (!sorted.length) return null;
+  sorted.sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 export function modelBoxEv(input: {
   cards: readonly EvCard[];
   slots: readonly RaritySlot[];
@@ -321,10 +351,8 @@ export function modelBoxEv(input: {
     const hitsPerPack =
       Number.isFinite(slot.hitsPerPack) && slot.hitsPerPack > 0 ? slot.hitsPerPack : 0;
     const hitsPerBox = hitsPerPack * packs;
-    const averagePrice = priced.length
-      ? priced.reduce((sum, card) => sum + (card.marketPrice as number), 0) / priced.length
-      : null;
-    const slotEv = averagePrice === null ? 0 : averagePrice * hitsPerBox;
+    const typicalPrice = medianPrice(priced.map((card) => card.marketPrice as number));
+    const slotEv = typicalPrice === null ? 0 : typicalPrice * hitsPerBox;
     modeledEv += slotEv;
     return {
       id: slot.id,
@@ -333,7 +361,7 @@ export function modelBoxEv(input: {
       hitsPerBox,
       cardCount: list.length,
       pricedCount: priced.length,
-      averagePrice,
+      typicalPrice,
       slotEv,
     };
   });

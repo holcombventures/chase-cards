@@ -415,6 +415,8 @@ async function handleTcgcsv(
       priceSource,
       fallbackUsed: false,
       priceBackend: fetchMeta.priceBackend,
+      sealedBoxMarket: fetchMeta.sealedBoxMarket ?? null,
+      sealedBoxName: fetchMeta.sealedBoxName ?? null,
       releaseDate: releaseDateParam,
       stats,
       pricesAsOf: pricesAsOfNow(),

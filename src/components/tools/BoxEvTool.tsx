@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatPrice, formatPricesAsOf } from "@/lib/prices";
 import {
   BOX_EV_SOURCES,
@@ -11,6 +11,7 @@ import {
   modelBoxEv,
   type RaritySlot,
 } from "@/lib/tools/boxEv";
+import type { ToolCategoryId } from "@/lib/tools/categories";
 import { boxEvSharePath } from "@/lib/tools/shareLinks";
 import { ShareButtons } from "./ShareButtons";
 import {
@@ -28,13 +29,15 @@ export function BoxEvTool() {
 
   return (
     <BoxEvForm
-      key={catalog.category}
+      key={`${catalog.category}:${catalog.setId}`}
       category={catalog.category}
       cards={catalog.cards}
       setId={catalog.selected?.id ?? ""}
       setName={catalog.selected?.name ?? ""}
       releaseDate={catalog.selected?.releaseDate ?? ""}
       pricesAsOf={catalog.meta?.pricesAsOf ?? null}
+      sealedBoxMarket={catalog.meta?.sealedBoxMarket ?? null}
+      sealedBoxName={catalog.meta?.sealedBoxName ?? null}
       loading={catalog.loading}
       error={catalog.error}
       sets={catalog.sets}
@@ -52,6 +55,8 @@ function BoxEvForm({
   setName,
   releaseDate,
   pricesAsOf,
+  sealedBoxMarket,
+  sealedBoxName,
   loading,
   error,
   sets,
@@ -65,6 +70,8 @@ function BoxEvForm({
   setName: string;
   releaseDate: string;
   pricesAsOf: string | null;
+  sealedBoxMarket: number | null;
+  sealedBoxName: string | null;
   loading: boolean;
   error: string | null;
   sets: ReturnType<typeof useToolCatalog>["sets"];
@@ -73,7 +80,16 @@ function BoxEvForm({
   onSet: ReturnType<typeof useToolCatalog>["setSetId"];
 }) {
   const defaults = cloneBoxDefaults(category);
-  const [boxPrice, setBoxPrice] = useState(defaults.boxPrice);
+  const sealed = useSealedBoxQuote({
+    category,
+    setId,
+    setName,
+    fromCards: sealedBoxMarket,
+    fromCardsName: sealedBoxName,
+    cardsReady: !loading,
+  });
+  const [boxOverride, setBoxOverride] = useState<number | null>(null);
+  const boxPrice = boxOverride ?? sealed.marketPrice ?? defaults.boxPrice;
   const [packsPerBox, setPacksPerBox] = useState(defaults.packsPerBox);
   const [slots, setSlots] = useState<RaritySlot[]>(defaults.slots);
 
@@ -151,7 +167,7 @@ function BoxEvForm({
             : `Your box price is ${Math.round(ratio * 100)}% of modeled EV. Good buy at 85% or less, fair through 110%, overpriced above that.`}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <NumberField label="Box price (USD)" value={boxPrice} onChange={setBoxPrice} estimate />
+          <NumberField label="Box price (USD)" value={boxPrice} onChange={setBoxOverride} estimate />
           <NumberField
             label="Packs per box"
             value={packsPerBox}
@@ -160,6 +176,13 @@ function BoxEvForm({
             estimate
           />
         </div>
+        <p className="text-xs leading-relaxed text-slate-400">
+          {sealed.status === "loading"
+            ? "Looking up the sealed box market…"
+            : sealed.marketPrice !== null
+              ? `Starts from the TCGplayer market for “${sealed.name || "booster box"}”. Still an estimate. Edit it.`
+              : "No sealed booster box market was found for this set, so the box price is a placeholder estimate. Edit it."}
+        </p>
         {sharePath ? (
           <ShareButtons path={sharePath} filename={`${category}-${setId}-box-ev`} />
         ) : null}
@@ -172,7 +195,7 @@ function BoxEvForm({
             <tr>
               <th className="px-3 py-2 font-medium">Rarity</th>
               <th className="px-3 py-2 font-medium">Cards</th>
-              <th className="px-3 py-2 font-medium">Avg live price</th>
+              <th className="px-3 py-2 font-medium">Typical price</th>
               <th className="px-3 py-2 font-medium">
                 Hits / pack <EstimateTag />
               </th>
@@ -188,7 +211,7 @@ function BoxEvForm({
                   {row.pricedCount}/{row.cardCount} priced
                 </td>
                 <td className="px-3 py-2 text-slate-100">
-                  {row.averagePrice === null ? "No price yet" : formatPrice(row.averagePrice)}
+                  {row.typicalPrice === null ? "No price yet" : formatPrice(row.typicalPrice)}
                 </td>
                 <td className="px-3 py-2">
                   <input
@@ -214,14 +237,76 @@ function BoxEvForm({
       <section className="space-y-2 text-sm leading-relaxed text-slate-300">
         <h2 className="text-base font-semibold text-white">Assumptions</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Box price, pack count, and pull rates start from public pack notes and opening write-ups. They are still estimates. Edit them.</li>
-          <li>Each priced card in a slot is treated as equally likely. Chase printings stay in their own slot, so a signed or iconic card is not averaged into a common rarity. Cards with no market price are left out of that slot&apos;s average.</li>
+          <li>Pull rates start from public pack notes and opening write-ups. They are still estimates. Edit them. A second check left the cited per-box counts in place.</li>
+          <li>
+            The box price starts from the current TCGplayer market for a sealed booster box or booster display when TCGCSV lists one in that set. Cases, half boxes, bundles, and packs are skipped. When several boxes are listed, the lower market is used. It is still an estimate. Edit it.
+          </li>
+          <li>Each slot&apos;s typical price is the median of cards with a market price. One very expensive printing does not set the value of every pull in that slot. Chase printings stay in their own slot. Cards with no market price are left out.</li>
           <li>{BOX_EV_SOURCES[category]}</li>
-          <li>Hits per box = hits per pack × packs per box. Slot EV = average live price × hits per box.</li>
+          <li>Hits per box = hits per pack × packs per box. Slot EV = typical price × hits per box.</li>
           <li>Modeled EV is the sum of the slot EVs. It is not a promise of what a box opens.</li>
           <li>Good buy if the box price is 85% or less of modeled EV. Fair up to 110%. Overpriced above 110%.</li>
         </ul>
       </section>
     </div>
   );
+}
+
+type SealedQuoteState = {
+  marketPrice: number | null;
+  name: string | null;
+  status: "loading" | "ready" | "missing";
+};
+
+function useSealedBoxQuote(input: {
+  category: ToolCategoryId;
+  setId: string;
+  setName: string;
+  fromCards: number | null;
+  fromCardsName: string | null;
+  cardsReady: boolean;
+}): SealedQuoteState {
+  const [fetched, setFetched] = useState<{ marketPrice: number | null; name: string | null } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!input.setId || !input.cardsReady || typeof input.fromCards === "number") return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ category: input.category, setId: input.setId });
+    if (input.setName) params.set("setName", input.setName);
+    fetch(`/api/tools/sealed-box?${params}`, { signal: controller.signal })
+      .then(async (res) => {
+        const body = (await res.json()) as { marketPrice?: unknown; name?: unknown };
+        if (!res.ok) throw new Error("sealed");
+        return body;
+      })
+      .then((body) => {
+        if (controller.signal.aborted) return;
+        setFetched({
+          marketPrice: typeof body.marketPrice === "number" ? body.marketPrice : null,
+          name: typeof body.name === "string" ? body.name : null,
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setFetched({ marketPrice: null, name: null });
+      });
+    return () => controller.abort();
+  }, [input.cardsReady, input.category, input.fromCards, input.setId, input.setName]);
+
+  if (typeof input.fromCards === "number") {
+    return {
+      marketPrice: input.fromCards,
+      name: input.fromCardsName,
+      status: "ready",
+    };
+  }
+  if (!input.setId || !input.cardsReady || !fetched) {
+    return { marketPrice: null, name: null, status: "loading" };
+  }
+  if (typeof fetched.marketPrice === "number") {
+    return { marketPrice: fetched.marketPrice, name: fetched.name, status: "ready" };
+  }
+  return { marketPrice: null, name: null, status: "missing" };
 }
