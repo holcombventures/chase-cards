@@ -227,11 +227,19 @@ export function productResultTitle(
   multiplier: number,
 ): string {
   const set = setName.trim();
-  let distinct = offer.name.trim();
+  let distinct = offer.name.trim().replace(/^(disney lorcana:|gundam card game)\s*/i, "");
   if (set && distinct.toLowerCase().includes(set.toLowerCase())) {
     const escaped = set.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    distinct = distinct.replace(new RegExp(escaped, "i"), "").replace(/^[\s:—–-]+/, "").trim();
+    const stripped = distinct
+      .replace(new RegExp(escaped, "i"), "")
+      .replace(/^[\s:—–-]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (stripped && stripped.toLowerCase().includes(offer.typeLabel.toLowerCase())) {
+      distinct = stripped;
+    }
   }
+  distinct = distinct.replace(/^[\s:—–-]+/, "").replace(/\s+/g, " ").trim();
   if (!distinct) distinct = offer.typeLabel;
   const count = Number.isFinite(packs) && packs > 0 ? Math.round(packs) : 0;
   const packText = count > 0 ? ` (${count} pack${count === 1 ? "" : "s"})` : "";

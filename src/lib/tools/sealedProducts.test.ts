@@ -100,7 +100,12 @@ test("fixed and mixed products are called out instead of given a pack EV", () =>
     { category: "lorcana", id: "24666", name: "Attack of the Vine!" },
   );
   const visible = visibleOffers(lorcana);
-  assert.equal(visible.find((offer) => offer.typeId === "booster-box")?.packs, 24);
+  const box = visible.find((offer) => offer.typeId === "booster-box");
+  assert.equal(box?.packs, 24);
+  assert.equal(
+    productResultTitle("Attack of the Vine!", box!, 24, 1),
+    "Attack of the Vine! · Booster Box (24 packs)",
+  );
   assert.equal(visible.find((offer) => offer.typeId === "trove")?.packs, 8);
   assert.equal(visible.find((offer) => offer.typeId === "trove")?.accessories, true);
   assert.equal(visible.some((offer) => /starter|prerelease/i.test(offer.name)), false);
@@ -135,6 +140,10 @@ test("Premium Booster and Edition Beta use their own pack counts", () => {
   assert.equal(box?.rateTable, "gundam-edition-beta");
   assert.deepEqual(box?.bonus, [{ slotId: "legend", hits: 1 }]);
   assert.equal(beta.find((offer) => offer.typeId === "edition-beta-pack")?.bonus.length, 0);
+  assert.equal(
+    productResultTitle("Edition Beta", box!, 16, 1),
+    "Edition Beta · Edition Beta Box (16 packs)",
+  );
 });
 
 test("Riftbound's sealed unit is the booster display, and a case multiplier stays in the title", () => {
