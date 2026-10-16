@@ -146,6 +146,7 @@ test("partial products use a known pack count and leave fixed contents out of EV
       product(1, "Vendetta - Vault"),
       product(2, "Vendetta - Pre-Rift Kit"),
       product(3, "Vendetta - Showdown"),
+      product(4, "Vendetta - Pre-Rift Event Kit"),
     ],
     [price(1, 40), price(2, 30), price(3, 25)],
     { category: "riftbound", id: "24698", name: "Vendetta" },
@@ -153,6 +154,7 @@ test("partial products use a known pack count and leave fixed contents out of EV
   assert.equal(rift.find((offer) => offer.typeId === "vault")?.packs, 6);
   assert.equal(rift.find((offer) => offer.typeId === "vault")?.accessories, true);
   assert.equal(rift.find((offer) => offer.typeId === "pre-rift")?.packs, 5);
+  assert.equal(rift.find((offer) => /event kit/i.test(offer.name))?.evApplies, false);
   assert.equal(rift.find((offer) => offer.typeId === "showdown")?.packs, 2);
 
   const anniversary = buildSealedOffers(

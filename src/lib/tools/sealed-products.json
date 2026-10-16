@@ -352,7 +352,7 @@
           "promo": true,
           "match": "pre-rift",
           "aliases": ["pre rift"],
-          "reject": ["case"],
+          "reject": ["case", "event"],
           "note": "Pack EV uses 5 packs. The fixed champion pack is not valued. The promo is optional."
         },
         {
