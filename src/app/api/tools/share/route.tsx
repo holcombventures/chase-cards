@@ -16,7 +16,7 @@ import {
 } from "@/lib/tools/boxEv";
 import { productResultTitle } from "@/lib/tools/sealedProducts";
 import { loadToolCards } from "@/lib/tools/catalogLoad";
-import { isToolCategoryId, type ToolCategoryId } from "@/lib/tools/categories";
+import { isHypeCategoryId, isToolCategoryId } from "@/lib/tools/categories";
 import {
   DEFAULT_CHECKLIST,
   DEFAULT_GRADE_MULTIPLIERS,
@@ -28,11 +28,11 @@ import { recordSnapshotHistory } from "@/lib/tools/hypeHistory";
 import {
   buzzPoints,
   countMentions,
+  deckSharePoints,
   hypeTotal,
   movementForCard,
   normalizeCardName,
   releaseTimingPoints,
-  tournamentPoints,
 } from "@/lib/tools/hypeScore";
 import { loadHypeSignals } from "@/lib/tools/signals";
 import { shareFormat, shareImageResponse } from "@/lib/tools/shareImage";
@@ -82,11 +82,12 @@ export async function GET(request: Request) {
   const category = url.searchParams.get("category") || "";
   const setId = url.searchParams.get("setId") || "";
   const format = shareFormat(url.searchParams.get("format"));
-  if (!isToolCategoryId(category) || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
-    return NextResponse.json({ error: "Invalid category or set." }, { status: 400 });
-  }
   if (tool !== "box-ev" && tool !== "grading-roi" && tool !== "hype") {
     return NextResponse.json({ error: "Unknown tool." }, { status: 400 });
+  }
+  const categoryOk = tool === "hype" ? isHypeCategoryId(category) : isToolCategoryId(category);
+  if (!categoryOk || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
+    return NextResponse.json({ error: "Invalid category or set." }, { status: 400 });
   }
 
   try {
@@ -99,6 +100,9 @@ export async function GET(request: Request) {
     const disclaimer = fanNote(category);
 
     if (tool === "box-ev") {
+      if (!isToolCategoryId(category)) {
+        return NextResponse.json({ error: "Invalid category or set." }, { status: 400 });
+      }
       const defaults = BOX_EV_DEFAULTS[category];
       const packs = Math.min(128, Math.max(0, numberParam(url.searchParams.get("packs"), defaults.packsPerBox)));
       const unitPrice = Math.max(0, numberParam(url.searchParams.get("boxPrice"), defaults.boxPrice));
@@ -202,20 +206,24 @@ export async function GET(request: Request) {
       });
     }
 
+    if (!isHypeCategoryId(category)) {
+      return NextResponse.json({ error: "Invalid category or set." }, { status: 400 });
+    }
     const releaseDate = url.searchParams.get("releaseDate") || loaded.meta.releaseDate || null;
-    const signals = await loadHypeSignals(category as ToolCategoryId);
+    const signals = await loadHypeSignals(category);
     const snapshot = await readStoredPriceSnapshot(category, setId);
     const history = snapshot ? await recordSnapshotHistory(snapshot) : null;
     const timing = releaseTimingPoints(releaseDate);
-    const copies =
-      signals.tournament.status === "ok"
-        ? signals.tournament.copies[normalizeCardName(card.name)] ?? 0
+    const nameKey = normalizeCardName(card.name);
+    const decks =
+      signals.tournament.status === "ok" && signals.tournament.decks
+        ? signals.tournament.decks[nameKey] ?? 0
         : null;
     const mentions =
       signals.buzz.status === "ok" ? countMentions(card.name, signals.buzz.posts) : null;
     const total = hypeTotal({
       timing: timing.status === "ok" ? timing.points : null,
-      tournament: copies === null ? null : tournamentPoints(copies),
+      tournament: decks === null ? null : deckSharePoints(decks, signals.tournament.decklists),
       buzz: mentions === null ? null : buzzPoints(mentions),
     });
     const movement = movementForCard(history, card.id);

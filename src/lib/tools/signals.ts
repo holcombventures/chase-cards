@@ -4,11 +4,13 @@
  * Results are cached so a refresh does not hammer either host.
  */
 
-import type { ToolCategoryId } from "./categories";
+import type { HypeCategoryId } from "./categories";
 import {
   collectDeckCards,
   parseAtomEntries,
-  tallyCopies,
+  REDDIT_BUSY_DETAIL,
+  RIFTBOUND_NO_DECKS,
+  tallyDeckPresence,
   type BuzzSignal,
   type TournamentSignal,
 } from "./hypeScore";
@@ -16,10 +18,12 @@ import { readToolJson, writeToolJson } from "./toolStore";
 
 const USER_AGENT = "ChaseCards/1.0 (collector tools; +https://chasecards.online)";
 const FETCH_TIMEOUT_MS = 4500;
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const TOURNAMENT_OK_TTL_MS = 6 * 60 * 60 * 1000;
+export const BUZZ_OK_TTL_MS = 12 * 60 * 60 * 1000;
+export const BUSY_TTL_MS = 15 * 60 * 1000;
 const FAIL_TTL_MS = 60 * 1000;
 
-const LIMITLESS_GAME: Record<ToolCategoryId, string> = {
+const LIMITLESS_GAME: Partial<Record<HypeCategoryId, string>> = {
   pokemon: "PTCG",
   "one-piece": "OP",
   lorcana: "LORCANA",
@@ -27,19 +31,31 @@ const LIMITLESS_GAME: Record<ToolCategoryId, string> = {
   gundam: "GUNDAM",
 };
 
-const LIMITLESS_FORMAT: Partial<Record<ToolCategoryId, string>> = {
+const LIMITLESS_FORMAT: Partial<Record<HypeCategoryId, string>> = {
   pokemon: "STANDARD",
   lorcana: "CONSTRUCTED",
 };
 
-/** Confirmed public feeds: r/PokemonTCG, r/OnePieceTCG, r/Lorcana, r/riftboundtcg, r/gundamcardgame. */
-const SUBREDDIT: Record<ToolCategoryId, string> = {
+/** Confirmed public feeds, plus r/magicTCG for the hype tracker. */
+const SUBREDDIT: Partial<Record<HypeCategoryId, string>> = {
   pokemon: "PokemonTCG",
   "one-piece": "OnePieceTCG",
   lorcana: "Lorcana",
   riftbound: "riftboundtcg",
   gundam: "gundamcardgame",
+  mtg: "magicTCG",
 };
+
+function emptyCounts(): { copies: Record<string, number>; decks: Record<string, number> } {
+  return { copies: {}, decks: {} };
+}
+
+export function signalCacheTtl(kind: "tournament" | "buzz", status: string): number {
+  if (status === "busy") return BUSY_TTL_MS;
+  if (status === "ok" && kind === "buzz") return BUZZ_OK_TTL_MS;
+  if (status === "ok") return TOURNAMENT_OK_TTL_MS;
+  return FAIL_TTL_MS;
+}
 
 export type HypeSignals = {
   tournament: TournamentSignal;
@@ -51,12 +67,14 @@ type CachedSignal<T> = { storedAt: number; value: T };
 
 const memoryCache = new Map<string, { storedAt: number; value: TournamentSignal | BuzzSignal }>();
 
-function cacheKey(category: string, kind: "tournament" | "buzz"): string {
-  return `signals/${category}/${kind}`;
+function cacheShapeOk(kind: "tournament" | "buzz", value: { status: string }): boolean {
+  if (kind !== "tournament") return true;
+  const decks = (value as TournamentSignal).decks;
+  return Boolean(decks) && typeof decks === "object";
 }
 
-function cacheTtl(status: string): number {
-  return status === "ok" ? CACHE_TTL_MS : FAIL_TTL_MS;
+function cacheKey(category: string, kind: "tournament" | "buzz"): string {
+  return `signals/${category}/${kind}`;
 }
 
 async function fetchText(url: string, accept: string): Promise<{ ok: boolean; status: number; text: string }> {
@@ -78,15 +96,18 @@ async function fetchText(url: string, accept: string): Promise<{ ok: boolean; st
   }
 }
 
-async function loadTournament(category: ToolCategoryId): Promise<TournamentSignal> {
+async function loadTournament(category: HypeCategoryId): Promise<TournamentSignal> {
   const gameId = LIMITLESS_GAME[category];
   if (!gameId) {
     return {
       status: "skipped",
-      detail: "No keyless tournament source for this game.",
+      detail:
+        category === "mtg"
+          ? "No public decklists for Magic in this tracker."
+          : "No public decklists for this game.",
       gameId: null,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
   const params = new URLSearchParams({ game: gameId, limit: "12" });
@@ -101,19 +122,19 @@ async function loadTournament(category: ToolCategoryId): Promise<TournamentSigna
   } catch {
     return {
       status: "unavailable",
-      detail: "Limitless did not respond.",
+      detail: "Tournament results didn't load, so this score uses the other signals.",
       gameId,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
   if (!list.ok) {
     return {
       status: "unavailable",
-      detail: `Limitless tournaments returned ${list.status}.`,
+      detail: "Tournament results didn't load, so this score uses the other signals.",
       gameId,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
   let rows: { id?: string; players?: number }[] = [];
@@ -123,10 +144,10 @@ async function loadTournament(category: ToolCategoryId): Promise<TournamentSigna
   } catch {
     return {
       status: "unavailable",
-      detail: "Limitless tournaments were not readable.",
+      detail: "Tournament results didn't load, so this score uses the other signals.",
       gameId,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
   const ids = rows
@@ -136,11 +157,14 @@ async function loadTournament(category: ToolCategoryId): Promise<TournamentSigna
     .map((row) => row.id as string);
   if (!ids.length) {
     return {
-      status: "unavailable",
-      detail: "Limitless listed no recent events.",
+      status: category === "riftbound" ? "skipped" : "unavailable",
+      detail:
+        category === "riftbound"
+          ? RIFTBOUND_NO_DECKS
+          : "No recent events were listed, so this score uses the other signals.",
       gameId,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
 
@@ -160,8 +184,7 @@ async function loadTournament(category: ToolCategoryId): Promise<TournamentSigna
     }),
   );
 
-  const cards = [];
-  let decklists = 0;
+  const decks: ReturnType<typeof collectDeckCards>[] = [];
   let responded = 0;
   for (const rows of standings) {
     if (rows.length) responded += 1;
@@ -171,31 +194,35 @@ async function loadTournament(category: ToolCategoryId): Promise<TournamentSigna
       if (!decklist) continue;
       const found = collectDeckCards(decklist);
       if (!found.length) continue;
-      decklists += 1;
-      cards.push(...found);
+      decks.push(found);
     }
   }
-  if (!decklists) {
+  if (!decks.length) {
     return {
-      status: "unavailable",
-      detail: responded
-        ? "Limitless responded, but the sampled events did not publish decklists."
-        : "Limitless standings did not respond.",
+      status: category === "riftbound" ? "skipped" : "unavailable",
+      detail:
+        category === "riftbound"
+          ? RIFTBOUND_NO_DECKS
+          : responded
+            ? "Those events didn't publish decklists, so this score uses the other signals."
+            : "Tournament results didn't load, so this score uses the other signals.",
       gameId,
       decklists: 0,
-      copies: {},
+      ...emptyCounts(),
     };
   }
+  const presence = tallyDeckPresence(decks);
   return {
     status: "ok",
-    detail: `${decklists} public decklist${decklists === 1 ? "" : "s"} from Limitless (${gameId}).`,
+    detail: `Last 6 big events · ${decks.length} public decklist${decks.length === 1 ? "" : "s"}.`,
     gameId,
-    decklists,
-    copies: tallyCopies(cards),
+    decklists: decks.length,
+    copies: presence.copies,
+    decks: presence.decks,
   };
 }
 
-async function loadBuzz(category: ToolCategoryId): Promise<BuzzSignal> {
+async function loadBuzz(category: HypeCategoryId): Promise<BuzzSignal> {
   const subreddit = SUBREDDIT[category];
   if (!subreddit) {
     return {
@@ -220,15 +247,12 @@ async function loadBuzz(category: ToolCategoryId): Promise<BuzzSignal> {
     };
   }
   if (res.status === 429) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    try {
-      res = await fetchText(
-        `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/.rss`,
-        "application/atom+xml, application/rss+xml, text/xml",
-      );
-    } catch {
-      res = { ok: false, status: 429, text: "" };
-    }
+    return {
+      status: "busy",
+      detail: REDDIT_BUSY_DETAIL,
+      subreddit,
+      posts: [],
+    };
   }
   if (!res.ok) {
     return {
@@ -260,31 +284,39 @@ async function loadBuzz(category: ToolCategoryId): Promise<BuzzSignal> {
   };
 }
 
-function readCached<T extends { status: string }>(raw: unknown, now: number): T | null {
+function readCached<T extends { status: string }>(
+  raw: unknown,
+  now: number,
+  kind: "tournament" | "buzz",
+): T | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as { storedAt?: unknown; value?: T };
   if (typeof value.storedAt !== "number" || !value.value || typeof value.value.status !== "string") {
     return null;
   }
-  if (now - value.storedAt > cacheTtl(value.value.status)) return null;
+  if (now - value.storedAt > signalCacheTtl(kind, value.value.status)) return null;
   return value.value;
 }
 
 async function loadCached<T extends { status: string }>(
-  category: ToolCategoryId,
+  category: HypeCategoryId,
   kind: "tournament" | "buzz",
   now: number,
   load: () => Promise<T>,
 ): Promise<{ value: T; cached: boolean }> {
   const key = cacheKey(category, kind);
   const memorized = memoryCache.get(key) as { storedAt: number; value: T } | undefined;
-  if (memorized && now - memorized.storedAt <= cacheTtl(memorized.value.status)) {
+  if (
+    memorized &&
+    now - memorized.storedAt <= signalCacheTtl(kind, memorized.value.status) &&
+    cacheShapeOk(kind, memorized.value)
+  ) {
     return { value: memorized.value, cached: true };
   }
   if (!memorized) {
     try {
-      const stored = readCached<T>(await readToolJson(key), now);
-      if (stored) {
+      const stored = readCached<T>(await readToolJson(key), now, kind);
+      if (stored && cacheShapeOk(kind, stored)) {
         memoryCache.set(key, {
           storedAt: now,
           value: stored as unknown as TournamentSignal | BuzzSignal,
@@ -298,7 +330,7 @@ async function loadCached<T extends { status: string }>(
   const value = await load();
   const fresh: CachedSignal<T> = { storedAt: now, value };
   memoryCache.set(key, fresh as unknown as { storedAt: number; value: TournamentSignal | BuzzSignal });
-  if (value.status === "ok") {
+  if (value.status === "ok" || value.status === "busy") {
     try {
       await writeToolJson(key, fresh);
     } catch (err) {
@@ -308,11 +340,9 @@ async function loadCached<T extends { status: string }>(
   return { value, cached: false };
 }
 
-export async function loadHypeSignals(category: ToolCategoryId, now = Date.now()): Promise<HypeSignals> {
-  const [tournament, buzz] = await Promise.all([
-    loadCached(category, "tournament", now, () => loadTournament(category)),
-    loadCached(category, "buzz", now, () => loadBuzz(category)),
-  ]);
+export async function loadHypeSignals(category: HypeCategoryId, now = Date.now()): Promise<HypeSignals> {
+  const tournament = await loadCached(category, "tournament", now, () => loadTournament(category));
+  const buzz = await loadCached(category, "buzz", now, () => loadBuzz(category));
   return {
     tournament: tournament.value,
     buzz: buzz.value,

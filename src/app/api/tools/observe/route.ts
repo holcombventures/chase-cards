@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readStoredPriceSnapshot } from "@/lib/priceSnapshotStore";
-import { isToolCategoryId } from "@/lib/tools/categories";
-import { movementMap, recordSnapshotHistory } from "@/lib/tools/hypeHistory";
+import { isHypeCategoryId } from "@/lib/tools/categories";
+import { movementMap, recordSnapshotHistory, windowMovementMap } from "@/lib/tools/hypeHistory";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const category = url.searchParams.get("category") || "";
   const setId = url.searchParams.get("setId") || "";
-  if (!isToolCategoryId(category) || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
+  if (!isHypeCategoryId(category) || !/^[a-zA-Z0-9.-]+$/.test(setId)) {
     return NextResponse.json({ error: "Invalid category or set." }, { status: 400 });
   }
 
@@ -24,20 +24,25 @@ export async function GET(request: Request) {
       pricesAsOf: null,
       points: 0,
       movement: {},
-      detail: "Collecting data. Movement appears after two price snapshots.",
+      detail: "Price history is still building. Daily snapshots add the next point.",
     });
   }
 
   const history = await recordSnapshotHistory(snapshot);
-  const latest = history.points[history.points.length - 1];
+  const ids = Object.keys(history.points[history.points.length - 1]?.prices ?? {});
   return NextResponse.json({
     recorded: true,
     pricesAsOf: snapshot.pricesAsOf,
     points: history.points.length,
-    movement: movementMap(history, Object.keys(latest?.prices ?? {})),
+    movement: movementMap(history, ids),
+    windows: {
+      "24h": windowMovementMap(history, ids, "24h"),
+      "7d": windowMovementMap(history, ids, "7d"),
+      "30d": windowMovementMap(history, ids, "30d"),
+    },
     detail:
       history.points.length < 2
-        ? "Collecting data. Movement appears after two price snapshots."
-        : `Movement from ${history.points.length} snapshots.`,
+        ? "Price history is still building. Daily snapshots add the next point."
+        : `Price history has ${history.points.length} daily snapshots.`,
   });
 }

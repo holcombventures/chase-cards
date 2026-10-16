@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { isToolCategoryId } from "@/lib/tools/categories";
+import { isHypeCategoryId } from "@/lib/tools/categories";
 import { loadHypeSignals } from "@/lib/tools/signals";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const category = new URL(request.url).searchParams.get("category") || "";
-  if (!isToolCategoryId(category)) {
+  if (!isHypeCategoryId(category)) {
     return NextResponse.json({ error: "Invalid category." }, { status: 400 });
   }
   try {
@@ -24,6 +24,7 @@ export async function GET(request: Request) {
         gameId: null,
         decklists: 0,
         copies: {},
+        decks: {},
       },
       buzz: {
         status: "unavailable",

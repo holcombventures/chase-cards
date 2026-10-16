@@ -3,8 +3,7 @@ import { HypeTool } from "@/components/tools/HypeTool";
 
 export const metadata: Metadata = {
   title: "Hype tracker",
-  description:
-    "Score cards from release timing, public tournament lists, and subreddit posts, next to live prices.",
+  description: "See which cards are heating up, and why.",
 };
 
 export default function HypePage() {

@@ -1,9 +1,7 @@
 import type { RaritySlot } from "./boxEv";
 import type { ChecklistScores, GradeMultipliers } from "./gradingRoi";
-import type { ToolCategoryId } from "./categories";
-
 type ShareBase = {
-  category: ToolCategoryId;
+  category: string;
   setId: string;
   setName?: string | null;
   releaseDate?: string | null;

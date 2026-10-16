@@ -4,34 +4,45 @@ import {
   buzzPoints,
   collectDeckCards,
   countMentions,
+  deckSharePoints,
   hypeTotal,
   mergePriceHistory,
   movementForCard,
   normalizeCardName,
   parseAtomEntries,
+  playedAndPricey,
   priceMovement,
   releaseTimingPoints,
+  swingEmptyLine,
+  swingMatches,
+  swingUnlockLine,
   tallyCopies,
+  tallyDeckPresence,
   tournamentPoints,
+  whyChips,
+  windowMovement,
   BUZZ_MAX,
+  HISTORY_MAX_POINTS,
   TIMING_MAX,
   TOURNAMENT_MAX,
 } from "./hypeScore";
+import { BUZZ_OK_TTL_MS, BUSY_TTL_MS, signalCacheTtl } from "./signals";
 
 const NOW = Date.parse("2026-10-15T00:00:00Z");
 
 test("release timing scores newer sets higher and skips a missing date", () => {
-  assert.equal(releaseTimingPoints("2026-10-15", NOW).points, 40);
-  assert.equal(releaseTimingPoints("2026-10-01", NOW).points, 40);
-  assert.equal(releaseTimingPoints("2026-09-20", NOW).points, 30);
-  assert.equal(releaseTimingPoints("2026-08-01", NOW).points, 18);
-  assert.equal(releaseTimingPoints("2026-05-20", NOW).points, 8);
-  assert.equal(releaseTimingPoints("2025-01-01", NOW).points, 2);
-  assert.equal(releaseTimingPoints("2026-10-20", NOW).points, 36);
+  assert.equal(releaseTimingPoints("2026-10-15", NOW).points, 20);
+  assert.equal(releaseTimingPoints("2026-10-01", NOW).points, 20);
+  assert.equal(releaseTimingPoints("2026-09-20", NOW).points, 15);
+  assert.equal(releaseTimingPoints("2026-08-01", NOW).points, 9);
+  assert.equal(releaseTimingPoints("2026-05-20", NOW).points, 4);
+  assert.equal(releaseTimingPoints("2025-01-01", NOW).points, 1);
+  assert.equal(releaseTimingPoints("2026-10-20", NOW).points, 18);
   const missing = releaseTimingPoints("", NOW);
   assert.equal(missing.status, "unavailable");
   assert.equal(missing.points, 0);
-  assert.equal(releaseTimingPoints("2026/10/15", NOW).points, 40);
+  assert.equal(missing.max, TIMING_MAX);
+  assert.equal(releaseTimingPoints("2026/10/15", NOW).points, 20);
 });
 
 test("tournament and buzz curves rise then flatten", () => {
@@ -46,25 +57,44 @@ test("tournament and buzz curves rise then flatten", () => {
   assert.ok(buzzPoints(30) <= BUZZ_MAX);
 });
 
-test("unavailable signals are left out of the hype total", () => {
-  const full = hypeTotal({ timing: 40, tournament: 35, buzz: 25 });
+test("hype total is always out of 100 and rescales a missing source", () => {
+  const full = hypeTotal({ timing: 20, tournament: 45, buzz: 35 });
   assert.equal(full.total, 100);
-  assert.equal(full.max, TIMING_MAX + TOURNAMENT_MAX + BUZZ_MAX);
+  assert.equal(full.max, 100);
+  assert.equal(TIMING_MAX + TOURNAMENT_MAX + BUZZ_MAX, 100);
   assert.equal(full.label, "Hot");
 
-  const partial = hypeTotal({ timing: 40, tournament: null, buzz: null });
-  assert.equal(partial.total, 40);
-  assert.equal(partial.max, 40);
+  const partial = hypeTotal({ timing: 20, tournament: null, buzz: null });
+  assert.equal(partial.total, 100);
+  assert.equal(partial.max, 100);
   assert.equal(partial.label, "Hot");
 
-  const quiet = hypeTotal({ timing: 2, tournament: 0, buzz: 0 });
+  const quiet = hypeTotal({ timing: 1, tournament: 0, buzz: 0 });
   assert.equal(quiet.label, "Quiet");
   assert.equal(hypeTotal({ timing: null, tournament: null, buzz: null }).label, "No signals");
+  assert.equal(hypeTotal({ timing: null, tournament: null, buzz: null }).max, 100);
 
-  const warm = hypeTotal({ timing: 18, tournament: 12, buzz: 12 });
+  const warm = hypeTotal({ timing: 9, tournament: 18, buzz: 15 });
   assert.equal(warm.total, 42);
   assert.equal(warm.max, 100);
   assert.equal(warm.label, "Warm");
+});
+
+test("deck share scores 41 percent as 18 of 45 and explains why", () => {
+  assert.equal(deckSharePoints(41, 100), 18);
+  assert.equal(deckSharePoints(100, 100), 45);
+  assert.equal(deckSharePoints(0, 20), 0);
+  const chips = whyChips({
+    decks: 41,
+    decklists: 100,
+    mentions: 3,
+    releaseDate: "2026-10-06",
+    now: NOW,
+  });
+  assert.deepEqual(chips, ["In 41% of decks", "3 Reddit posts", "Set out 9 days"]);
+  assert.equal(playedAndPricey(0.1, 5), true);
+  assert.equal(playedAndPricey(0.09, 20), false);
+  assert.equal(playedAndPricey(0.4, 4), false);
 });
 
 test("mentions match a card name and not a longer name", () => {
@@ -123,6 +153,62 @@ test("history keeps one point per as-of time", () => {
     history = mergePriceHistory(history, { at: String(index), prices: {} }, { category: "pokemon", setId: "me5" }, 3);
   }
   assert.deepEqual(history.points.map((point) => point.at), ["2", "3", "4"]);
+  let capped = mergePriceHistory(null, { at: "0", prices: {} }, { category: "pokemon", setId: "me5" });
+  for (let index = 1; index <= HISTORY_MAX_POINTS + 2; index += 1) {
+    capped = mergePriceHistory(capped, { at: String(index), prices: {} }, { category: "pokemon", setId: "me5" });
+  }
+  assert.equal(capped.points.length, HISTORY_MAX_POINTS);
+});
+
+test("windowed movement waits until the log spans the window", () => {
+  const short = windowMovement(
+    [
+      { at: "2026-10-01", price: 10 },
+      { at: "2026-10-03", price: 12 },
+    ],
+    7,
+  );
+  assert.equal(short.status, "collecting");
+  if (short.status === "collecting") assert.equal(short.unlocksOn, "2026-10-08");
+  assert.equal(swingUnlockLine("7d", "2026-10-08"), "7-day moves unlock Oct 8, 2026");
+
+  const ready = windowMovement(
+    [
+      { at: "2026-10-01", price: 10 },
+      { at: "2026-10-08", price: 12 },
+    ],
+    7,
+  );
+  assert.equal(ready.status, "ready");
+  if (ready.status === "ready") assert.equal(ready.percent, 20);
+  assert.equal(swingMatches(ready, "up", 10), true);
+  assert.equal(swingMatches(ready, "down", 10), false);
+  assert.equal(swingMatches(ready, "both", 25), false);
+  assert.equal(
+    swingEmptyLine(10, "7d"),
+    "No cards moved ±10% above $1 in 7 days, try ±5%",
+  );
+});
+
+test("deck presence counts a deck once and keeps its copies", () => {
+  const presence = tallyDeckPresence([
+    [
+      { name: "Charizard ex", count: 3 },
+      { name: "Charizard ex", count: 1 },
+    ],
+    [{ name: "Charizard ex", count: 2 }],
+    [{ name: "Pikachu", count: 4 }],
+  ]);
+  assert.equal(presence.decks["charizard ex"], 2);
+  assert.equal(presence.copies["charizard ex"], 6);
+  assert.equal(presence.decks.pikachu, 1);
+});
+
+test("reddit successes cache for 12 hours and a busy response is shorter", () => {
+  assert.equal(signalCacheTtl("buzz", "ok"), BUZZ_OK_TTL_MS);
+  assert.equal(BUZZ_OK_TTL_MS, 12 * 60 * 60 * 1000);
+  assert.equal(signalCacheTtl("buzz", "busy"), BUSY_TTL_MS);
+  assert.equal(signalCacheTtl("tournament", "ok"), 6 * 60 * 60 * 1000);
 });
 
 test("decklist walking counts leaders without a count and ignores player names", () => {

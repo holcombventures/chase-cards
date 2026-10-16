@@ -1,20 +1,23 @@
 "use client";
 
-import { getCategory, isCategoryId } from "@/lib/catalog/types";
-import { TOOL_CATEGORY_IDS, type ToolCategoryId } from "@/lib/tools/categories";
+import { getCategory, isCategoryId, type CategoryId } from "@/lib/catalog/types";
+import { TOOL_CATEGORY_IDS } from "@/lib/tools/categories";
 import { ESTIMATE_LABEL } from "@/lib/tools/boxEv";
 import type { PokemonSet } from "@/lib/types";
 
 const selectClass =
   "w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300";
 
-export function CategoryPicker({
+export function CategoryPicker<T extends string>({
   value,
   onChange,
+  ids,
 }: {
-  value: ToolCategoryId;
-  onChange: (id: ToolCategoryId) => void;
+  value: T;
+  onChange: (id: T) => void;
+  ids?: readonly T[];
 }) {
+  const choices = ids ?? (TOOL_CATEGORY_IDS as readonly string[] as readonly T[]);
   return (
     <label className="flex min-w-0 flex-1 flex-col gap-1.5">
       <span className="text-xs font-semibold uppercase tracking-wider text-amber-200/80">
@@ -23,11 +26,11 @@ export function CategoryPicker({
       <select
         className={selectClass}
         value={value}
-        onChange={(event) => onChange(event.target.value as ToolCategoryId)}
+        onChange={(event) => onChange(event.target.value as T)}
       >
-        {TOOL_CATEGORY_IDS.map((id) => (
+        {choices.map((id) => (
           <option key={id} value={id}>
-            {getCategory(id).label}
+            {isCategoryId(id) ? getCategory(id as CategoryId).label : id}
           </option>
         ))}
       </select>

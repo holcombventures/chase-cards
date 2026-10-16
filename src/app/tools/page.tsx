@@ -22,7 +22,7 @@ const TOOLS = [
   {
     href: "/tools/hype",
     title: "Hype tracker",
-    body: "Score cards from release timing, public tournament lists, and subreddit posts. Watchlist stays on this device.",
+    body: "See which cards are heating up, and why. Favorites stay in this browser.",
   },
 ] as const;
 

@@ -1,21 +1,30 @@
 /**
- * Hype score from release timing, tournament copies, and public-post buzz.
- * Each component is reported on its own. A blocked source is left out of the
- * total instead of being treated as zero usage.
+ * Hype score from deck share, public-post buzz, and release timing.
+ * The number on the page is always out of 100. A blocked source is left out
+ * and the remaining points are rescaled, instead of being treated as zero usage.
  */
 
-export const TIMING_MAX = 40;
-export const TOURNAMENT_MAX = 35;
-export const BUZZ_MAX = 25;
+export const TIMING_MAX = 20;
+export const TOURNAMENT_MAX = 45;
+export const BUZZ_MAX = 35;
+export const HISTORY_MAX_POINTS = 35;
 
-export type SignalStatus = "ok" | "unavailable" | "skipped";
+export const REDDIT_BUSY_DETAIL =
+  "Reddit is busy right now, so hype uses tournaments + set age for this game";
+export const RIFTBOUND_NO_DECKS = "No public decklists yet";
+export const FAVORITES_EMPTY = "No favorites yet. Tap ☆ on any card…";
+
+export type SignalStatus = "ok" | "unavailable" | "skipped" | "busy";
 
 export type TournamentSignal = {
   status: SignalStatus;
   detail: string;
   gameId: string | null;
   decklists: number;
+  /** Copy totals across sampled decklists, keyed by normalized card name. */
   copies: Record<string, number>;
+  /** Decklists that include the card at least once. */
+  decks: Record<string, number>;
 };
 
 export type BuzzPost = { title: string; text: string };
@@ -95,27 +104,34 @@ export function releaseTimingPoints(
   if (days < 0) {
     return {
       status: "ok",
-      points: 36,
+      points: 18,
       max: TIMING_MAX,
       label: `Releases in ${-days} day${-days === 1 ? "" : "s"}`,
     };
   }
   if (days <= 14) {
-    return { status: "ok", points: 40, max: TIMING_MAX, label: `Released ${days} day${days === 1 ? "" : "s"} ago` };
+    return { status: "ok", points: 20, max: TIMING_MAX, label: `Released ${days} day${days === 1 ? "" : "s"} ago` };
   }
   if (days <= 45) {
-    return { status: "ok", points: 30, max: TIMING_MAX, label: `Released ${days} days ago` };
+    return { status: "ok", points: 15, max: TIMING_MAX, label: `Released ${days} days ago` };
   }
   if (days <= 90) {
-    return { status: "ok", points: 18, max: TIMING_MAX, label: `Released ${days} days ago` };
+    return { status: "ok", points: 9, max: TIMING_MAX, label: `Released ${days} days ago` };
   }
   if (days <= 180) {
-    return { status: "ok", points: 8, max: TIMING_MAX, label: `Released ${days} days ago` };
+    return { status: "ok", points: 4, max: TIMING_MAX, label: `Released ${days} days ago` };
   }
-  return { status: "ok", points: 2, max: TIMING_MAX, label: `Released ${days} days ago` };
+  return { status: "ok", points: 1, max: TIMING_MAX, label: `Released ${days} days ago` };
 }
 
-/** Diminishing curve so one copy registers and a staple approaches the cap. */
+/** Deck share of the sampled lists, capped at the tournament weight. */
+export function deckSharePoints(decks: number, decklists: number): number {
+  if (!Number.isFinite(decks) || decks <= 0 || !Number.isFinite(decklists) || decklists <= 0) return 0;
+  const share = Math.min(1, decks / decklists);
+  return Math.round(TOURNAMENT_MAX * share);
+}
+
+/** Older copy-count curve. The tracker scores deck share; this remains for tests. */
 export function tournamentPoints(copies: number): number {
   if (!Number.isFinite(copies) || copies <= 0) return 0;
   return Math.round(TOURNAMENT_MAX * (1 - Math.exp(-copies / 12)));
@@ -126,25 +142,66 @@ export function buzzPoints(mentions: number): number {
   return Math.round(BUZZ_MAX * (1 - Math.exp(-mentions / 3)));
 }
 
+/** Always out of 100. Missing sources are dropped, then the rest is rescaled. */
 export function hypeTotal(parts: HypeParts): HypeTotal {
-  let total = 0;
-  let max = 0;
+  let earned = 0;
+  let available = 0;
   if (parts.timing !== null) {
-    total += parts.timing;
-    max += TIMING_MAX;
+    earned += parts.timing;
+    available += TIMING_MAX;
   }
   if (parts.tournament !== null) {
-    total += parts.tournament;
-    max += TOURNAMENT_MAX;
+    earned += parts.tournament;
+    available += TOURNAMENT_MAX;
   }
   if (parts.buzz !== null) {
-    total += parts.buzz;
-    max += BUZZ_MAX;
+    earned += parts.buzz;
+    available += BUZZ_MAX;
   }
-  if (max <= 0) return { total: 0, max: 0, label: "No signals" };
-  const ratio = total / max;
+  if (available <= 0) return { total: 0, max: 100, label: "No signals" };
+  const ratio = earned / available;
+  const total = Math.round(ratio * 100);
   const label = ratio >= 0.72 ? "Hot" : ratio >= 0.4 ? "Warm" : "Quiet";
-  return { total, max, label };
+  return { total, max: 100, label };
+}
+
+export function whyChips(input: {
+  decks: number | null;
+  decklists: number;
+  mentions: number | null;
+  releaseDate: string | null | undefined;
+  now?: number;
+}): string[] {
+  const chips: string[] = [];
+  if (input.decks !== null && input.decklists > 0) {
+    const pct = Math.round((Math.min(input.decks, input.decklists) / input.decklists) * 100);
+    chips.push(`In ${pct}% of decks`);
+  }
+  if (input.mentions !== null && input.mentions > 0) {
+    chips.push(`${input.mentions} Reddit post${input.mentions === 1 ? "" : "s"}`);
+  }
+  const released = parseReleaseMs(input.releaseDate);
+  if (released !== null) {
+    const days = Math.round(((input.now ?? Date.now()) - released) / 86_400_000);
+    if (days < 0) {
+      const ahead = -days;
+      chips.push(`Out in ${ahead} day${ahead === 1 ? "" : "s"}`);
+    } else if (days === 0) {
+      chips.push("Set out today");
+    } else {
+      chips.push(`Set out ${days} day${days === 1 ? "" : "s"}`);
+    }
+  }
+  return chips;
+}
+
+export function playedAndPricey(share: number | null, price: number | null): boolean {
+  return share !== null && share >= 0.1 && price !== null && price >= 5;
+}
+
+export function averageCopies(copies: number, decks: number): number | null {
+  if (!Number.isFinite(decks) || decks <= 0 || !Number.isFinite(copies)) return null;
+  return copies / decks;
 }
 
 export function escapeRegExp(value: string): string {
@@ -196,7 +253,7 @@ export function mergePriceHistory(
   history: SetPriceHistory | null,
   point: HistoryPoint,
   identity: { category: string; setId: string },
-  maxPoints = 16,
+  maxPoints = HISTORY_MAX_POINTS,
 ): SetPriceHistory {
   const base: SetPriceHistory = history ?? {
     v: 1,
@@ -264,6 +321,137 @@ export function collectDeckCards(node: unknown, out: DeckCard[] = [], depth = 0)
   return out;
 }
 
+export type SwingWindow = "24h" | "7d" | "30d";
+
+export const SWING_WINDOW_DAYS: Record<SwingWindow, number> = {
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+};
+
+export type WindowMovement =
+  | { status: "collecting"; unlocksOn: string | null }
+  | {
+      status: "ready";
+      from: number;
+      to: number;
+      delta: number;
+      percent: number | null;
+      fromAt: string;
+      toAt: string;
+    };
+
+export function pointTime(at: string): number | null {
+  const day = at.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day) && at.length === 10) {
+    const ms = Date.parse(`${day}T00:00:00Z`);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const ms = Date.parse(at);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function formatUnlockDate(isoDay: string): string {
+  const ms = Date.parse(`${isoDay.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(ms)) return isoDay;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const date = new Date(ms);
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+}
+
+export function swingUnlockLine(windowId: SwingWindow, unlocksOn: string | null): string {
+  const label = windowId === "24h" ? "24-hour" : windowId === "30d" ? "30-day" : "7-day";
+  if (!unlocksOn) return `${label} moves unlock after daily prices cover that window.`;
+  return `${label} moves unlock ${formatUnlockDate(unlocksOn)}`;
+}
+
+export function swingEmptyLine(threshold: number, windowId: SwingWindow): string {
+  const phrase = windowId === "24h" ? "24 hours" : windowId === "30d" ? "30 days" : "7 days";
+  const base = `No cards moved ±${threshold}% above $1 in ${phrase}`;
+  if (threshold === 5) return `${base}.`;
+  return `${base}, try ±5%`;
+}
+
+/**
+ * Ready only when the log spans the window. The comparison is the latest
+ * price against the last price at or before the start of that window.
+ */
+export function windowMovement(
+  points: readonly PricePoint[],
+  windowDays: number,
+  now = Date.now(),
+): WindowMovement {
+  const byAt = new Map<string, { at: string; price: number; time: number }>();
+  for (const point of points) {
+    const time = pointTime(point.at);
+    if (time === null || !Number.isFinite(point.price)) continue;
+    byAt.set(point.at, { at: point.at, price: point.price, time });
+  }
+  const ordered = [...byAt.values()].sort((a, b) => a.time - b.time);
+  if (!ordered.length) return { status: "collecting", unlocksOn: null };
+  const earliest = ordered[0];
+  const need = windowDays * 86_400_000;
+  const unlockMs = earliest.time + need;
+  const unlocksOn = new Date(unlockMs).toISOString().slice(0, 10);
+  const latest = ordered[ordered.length - 1];
+  if (ordered.length < 2 || latest.time - earliest.time < need) {
+    return { status: "collecting", unlocksOn };
+  }
+  const cutoff = Math.min(latest.time, now) - need;
+  let baseline = earliest;
+  for (const point of ordered) {
+    if (point.time <= cutoff) baseline = point;
+  }
+  if (baseline.at === latest.at) return { status: "collecting", unlocksOn };
+  const delta = latest.price - baseline.price;
+  const percent = baseline.price > 0 ? (delta / baseline.price) * 100 : null;
+  return {
+    status: "ready",
+    from: baseline.price,
+    to: latest.price,
+    delta,
+    percent,
+    fromAt: baseline.at,
+    toAt: latest.at,
+  };
+}
+
+export function windowMovementForCard(
+  history: SetPriceHistory | null,
+  cardId: string,
+  windowDays: number,
+  now = Date.now(),
+): WindowMovement {
+  if (!history) return { status: "collecting", unlocksOn: null };
+  const points: PricePoint[] = [];
+  for (const point of history.points) {
+    const price = point.prices[cardId];
+    if (typeof price === "number") points.push({ at: point.at, price });
+  }
+  return windowMovement(points, windowDays, now);
+}
+
+export type SwingDirection = "up" | "down" | "both";
+
+export function swingMatches(
+  movement: WindowMovement,
+  direction: SwingDirection,
+  thresholdPct: number,
+): boolean {
+  if (movement.status !== "ready" || movement.percent === null) return false;
+  if (Math.abs(movement.percent) + 1e-9 < thresholdPct) return false;
+  if (direction === "up") return movement.percent > 0;
+  if (direction === "down") return movement.percent < 0;
+  return movement.percent !== 0;
+}
+
+export function isNewOrUpcoming(releaseDate: string | null | undefined, now = Date.now()): boolean {
+  const released = parseReleaseMs(releaseDate);
+  if (released === null) return false;
+  const days = (now - released) / 86_400_000;
+  return days <= 45;
+}
+
 export function tallyCopies(cards: readonly DeckCard[]): Record<string, number> {
   const copies: Record<string, number> = {};
   for (const card of cards) {
@@ -272,6 +460,30 @@ export function tallyCopies(cards: readonly DeckCard[]): Record<string, number> 
     copies[key] = (copies[key] ?? 0) + card.count;
   }
   return copies;
+}
+
+/** One count per decklist that includes the name, plus the copies those decks play. */
+export function tallyDeckPresence(decks: readonly (readonly DeckCard[])[]): {
+  decks: Record<string, number>;
+  copies: Record<string, number>;
+} {
+  const deckCounts: Record<string, number> = {};
+  const copies: Record<string, number> = {};
+  for (const cards of decks) {
+    const seen = new Set<string>();
+    const inDeck: Record<string, number> = {};
+    for (const card of cards) {
+      const key = normalizeCardName(card.name);
+      if (!key) continue;
+      seen.add(key);
+      inDeck[key] = (inDeck[key] ?? 0) + card.count;
+    }
+    for (const key of seen) {
+      deckCounts[key] = (deckCounts[key] ?? 0) + 1;
+      copies[key] = (copies[key] ?? 0) + (inDeck[key] ?? 0);
+    }
+  }
+  return { decks: deckCounts, copies };
 }
 
 export function parseAtomEntries(xml: string): { title: string; text: string }[] {
