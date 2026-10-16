@@ -6,10 +6,15 @@ import {
   boxEvVerdict,
   boxPriceRatio,
   classifyCard,
-  cloneBoxDefaults,
+  BOX_EV_DEFAULTS,
+  ESTIMATED_RATES_LABEL,
+  EV_NOT_APPLICABLE,
+  exactPriceSource,
   modelBoxEv,
+  slotsForRate,
   type RaritySlot,
 } from "@/lib/tools/boxEv";
+import { productResultTitle } from "@/lib/tools/sealedProducts";
 import { loadToolCards } from "@/lib/tools/catalogLoad";
 import { isToolCategoryId, type ToolCategoryId } from "@/lib/tools/categories";
 import {
@@ -31,7 +36,6 @@ import {
 } from "@/lib/tools/hypeScore";
 import { loadHypeSignals } from "@/lib/tools/signals";
 import { shareFormat, shareImageResponse } from "@/lib/tools/shareImage";
-import type { CardWithPrice } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +43,18 @@ function numberParam(value: string | null, fallback: number): number {
   if (value == null || value.trim() === "") return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function applyBonus(raw: string | null, multiplier: number): { slotId: string; hits: number }[] {
+  if (!raw) return [];
+  const hits: { slotId: string; hits: number }[] = [];
+  for (const part of raw.split(",")) {
+    const [slotId, value] = part.split(":");
+    const parsed = Number(value);
+    if (!slotId || !Number.isFinite(parsed) || parsed <= 0) continue;
+    hits.push({ slotId, hits: parsed * multiplier });
+  }
+  return hits;
 }
 
 function applyHits(slots: RaritySlot[], raw: string | null): RaritySlot[] {
@@ -58,15 +74,6 @@ function applyHits(slots: RaritySlot[], raw: string | null): RaritySlot[] {
 function fanNote(category: string): string | null {
   if (!isCategoryId(category)) return null;
   return getCategory(category).disclaimer ?? null;
-}
-
-function topPriced(cards: CardWithPrice[]): CardWithPrice | null {
-  let best: CardWithPrice | null = null;
-  for (const card of cards) {
-    if (card.marketPrice === null) continue;
-    if (!best || card.marketPrice > (best.marketPrice as number)) best = card;
-  }
-  return best;
 }
 
 export async function GET(request: Request) {
@@ -92,32 +99,59 @@ export async function GET(request: Request) {
     const disclaimer = fanNote(category);
 
     if (tool === "box-ev") {
-      const defaults = cloneBoxDefaults(category);
-      const packsPerBox = Math.min(128, Math.max(0, numberParam(url.searchParams.get("packs"), defaults.packsPerBox)));
-      const boxPrice = Math.max(0, numberParam(url.searchParams.get("boxPrice"), defaults.boxPrice));
+      const defaults = BOX_EV_DEFAULTS[category];
+      const packs = Math.min(128, Math.max(0, numberParam(url.searchParams.get("packs"), defaults.packsPerBox)));
+      const unitPrice = Math.max(0, numberParam(url.searchParams.get("boxPrice"), defaults.boxPrice));
+      const multiplier = Math.min(48, Math.max(1, Math.round(numberParam(url.searchParams.get("multiplier"), 1))));
+      const rateTable = url.searchParams.get("rate") || "standard";
+      const productName = url.searchParams.get("product") || "";
+      const typeLabel = url.searchParams.get("type") || "Booster Box";
+      const notApplicable = url.searchParams.get("na") === "1";
+      const title = productResultTitle(
+        setName,
+        { name: productName || typeLabel, typeLabel, packs },
+        packs,
+        multiplier,
+      );
+      const source = exactPriceSource(multiplier);
+      if (notApplicable) {
+        return shareImageResponse({
+          format,
+          kicker: "Box EV",
+          title,
+          subtitle: typeLabel,
+          priceLabel: "Sealed product price",
+          price: formatPrice(unitPrice * multiplier),
+          verdict: "Not applicable",
+          badge: ESTIMATED_RATES_LABEL,
+          note: `${EV_NOT_APPLICABLE}. ${source}.`,
+          disclaimer,
+        });
+      }
+      const totalPacks = packs * multiplier;
       const model = modelBoxEv({
         cards: loaded.cards,
-        slots: applyHits(defaults.slots, url.searchParams.get("hits")),
-        packsPerBox,
+        slots: applyHits(slotsForRate(category, rateTable), url.searchParams.get("hits")),
+        packsPerBox: totalPacks,
+        bonusHits: applyBonus(url.searchParams.get("bonus"), multiplier),
         classify: (card) => classifyCard(category, card),
       });
-      const verdict = boxEvVerdict(boxPrice, model.modeledEv, model.pricedCards);
-      const ratio = boxPriceRatio(boxPrice, model.modeledEv);
-      const chase = topPriced(loaded.cards);
+      const compared = unitPrice * multiplier;
+      const verdict = boxEvVerdict(compared, model.modeledEv, model.pricedCards);
+      const ratio = boxPriceRatio(compared, model.modeledEv);
       const image = await shareImageResponse({
         format,
         kicker: "Box EV",
-        title: setName,
-        subtitle: chase
-          ? `${chase.name} · live ${formatPrice(chase.marketPrice)}`
-          : "Live card prices",
-        priceLabel: "Modeled EV per box",
+        title,
+        subtitle: typeLabel,
+        priceLabel: "Modeled pack EV",
         price: formatPrice(model.modeledEv),
         verdict,
+        badge: ESTIMATED_RATES_LABEL,
         note:
           ratio === null
-            ? "Estimate, not advice. Pull rates are editable guesses."
-            : `Box price ${formatPrice(boxPrice)} is ${Math.round(ratio * 100)}% of modeled EV. Estimate, not advice.`,
+            ? `${source}. Need prices before a verdict.`
+            : `${source}. ${formatPrice(compared)} is ${Math.round(ratio * 100)}% of pack EV.`,
         disclaimer,
       });
       return image;

@@ -171,6 +171,78 @@ const GUNDAM_SLOTS: RaritySlot[] = [
   { id: "other", label: "Other", hitsPerPack: 0 },
 ];
 
+/** Unconfirmed. A Premium Booster box is 20 packs, not a 24-pack main set. */
+const ONE_PIECE_PRB_HITS: Record<string, number> = {
+  common: 4,
+  uncommon: 3,
+  rare: 1.5,
+  "super-rare": 7 / 20,
+  leader: 5 / 20,
+  secret: 2 / 20,
+  alt: 3 / 20,
+  "case-hit": 0.25 / 20,
+  sp: 0,
+  other: 0,
+};
+
+/**
+ * Unconfirmed 9-card Edition Beta pack. The guaranteed Legend Rare is a
+ * bonus hit on the box, not a per-pack rate.
+ */
+const GUNDAM_BETA_HITS: Record<string, number> = {
+  common: 5,
+  uncommon: 3,
+  rare: 1,
+  legend: 0,
+  "lr-plus": 0,
+  "r-plus": 0,
+  link: 0,
+  "c-plus": 0,
+  "u-plus": 0,
+  sp: 0,
+  "lr-plus-plus": 0,
+  other: 0,
+};
+
+const ONE_PIECE_PRB_SLOTS: RaritySlot[] = ONE_PIECE_SLOTS.map((slot) => ({
+  ...slot,
+  hitsPerPack: ONE_PIECE_PRB_HITS[slot.id] ?? 0,
+}));
+
+const GUNDAM_BETA_SLOTS: RaritySlot[] = GUNDAM_SLOTS.map((slot) => ({
+  ...slot,
+  hitsPerPack: GUNDAM_BETA_HITS[slot.id] ?? 0,
+}));
+
+export const RATE_TABLES = {
+  standard: null,
+  "one-piece-prb": ONE_PIECE_PRB_SLOTS,
+  "gundam-edition-beta": GUNDAM_BETA_SLOTS,
+} as const;
+
+export type RateTableId = keyof typeof RATE_TABLES;
+
+export const ESTIMATED_RATES_LABEL = "Estimated rates";
+export const PRICE_SOURCE_LABEL = "Price source: TCGplayer sealed market for this exact product";
+export const EV_NOT_APPLICABLE = "EV not applicable: fixed or mixed contents";
+export const ACCESSORIES_NOT_VALUED = "Accessories not valued";
+
+/** The required price-source sentence, plus a case count when the visitor buys more than one. */
+export function exactPriceSource(multiplier: number): string {
+  const count = Number.isFinite(multiplier) && multiplier > 1 ? Math.round(multiplier) : 1;
+  return count > 1 ? `${PRICE_SOURCE_LABEL} × ${count} products` : PRICE_SOURCE_LABEL;
+}
+
+export function slotsForRate(category: ToolCategoryId, rateTable: string): RaritySlot[] {
+  const table = RATE_TABLES[rateTable as RateTableId];
+  const slots = table ?? BOX_EV_DEFAULTS[category].slots;
+  return slots.map((slot) => ({ ...slot }));
+}
+
+export function rateTableIsUnconfirmed(rateTable: string): boolean {
+  return rateTable === "one-piece-prb" || rateTable === "gundam-edition-beta";
+}
+
 export const BOX_EV_DEFAULTS: Record<ToolCategoryId, BoxEvDefaults> = {
   pokemon: { packsPerBox: 36, boxPrice: 180, slots: POKEMON_SLOTS },
   "one-piece": { packsPerBox: 24, boxPrice: 120, slots: ONE_PIECE_SLOTS },
@@ -332,8 +404,15 @@ export function modelBoxEv(input: {
   slots: readonly RaritySlot[];
   packsPerBox: number;
   classify: (card: EvCard) => string;
+  /** Hits added once per product, such as Edition Beta's guaranteed Legend Rare. */
+  bonusHits?: readonly { slotId: string; hits: number }[];
 }): BoxEvModel {
   const packs = Number.isFinite(input.packsPerBox) && input.packsPerBox > 0 ? input.packsPerBox : 0;
+  const bonus = new Map<string, number>();
+  for (const extra of input.bonusHits ?? []) {
+    if (!Number.isFinite(extra.hits) || extra.hits <= 0) continue;
+    bonus.set(extra.slotId, (bonus.get(extra.slotId) ?? 0) + extra.hits);
+  }
   const groups = new Map<string, EvCard[]>();
   for (const card of input.cards) {
     const id = input.classify(card);
@@ -350,7 +429,7 @@ export function modelBoxEv(input: {
     pricedCards += priced.length;
     const hitsPerPack =
       Number.isFinite(slot.hitsPerPack) && slot.hitsPerPack > 0 ? slot.hitsPerPack : 0;
-    const hitsPerBox = hitsPerPack * packs;
+    const hitsPerBox = hitsPerPack * packs + (bonus.get(slot.id) ?? 0);
     const typicalPrice = medianPrice(priced.map((card) => card.marketPrice as number));
     const slotEv = typicalPrice === null ? 0 : typicalPrice * hitsPerBox;
     modeledEv += slotEv;

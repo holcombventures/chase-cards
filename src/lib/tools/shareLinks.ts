@@ -22,12 +22,30 @@ function baseParams(input: ShareBase, tool: string): URLSearchParams {
 }
 
 export function boxEvSharePath(
-  input: ShareBase & { boxPrice: number; packsPerBox: number; slots: readonly RaritySlot[] },
+  input: ShareBase & {
+    boxPrice: number;
+    packsPerBox: number;
+    slots: readonly RaritySlot[];
+    productName?: string | null;
+    typeLabel?: string | null;
+    multiplier?: number;
+    notApplicable?: boolean;
+    rateTable?: string | null;
+    bonus?: readonly { slotId: string; hits: number }[];
+  },
 ): string {
   const params = baseParams(input, "box-ev");
   params.set("boxPrice", String(input.boxPrice));
   params.set("packs", String(input.packsPerBox));
   params.set("hits", input.slots.map((slot) => `${slot.id}:${slot.hitsPerPack}`).join(","));
+  if (input.productName) params.set("product", input.productName);
+  if (input.typeLabel) params.set("type", input.typeLabel);
+  if (input.multiplier && input.multiplier > 1) params.set("multiplier", String(input.multiplier));
+  if (input.notApplicable) params.set("na", "1");
+  if (input.rateTable && input.rateTable !== "standard") params.set("rate", input.rateTable);
+  if (input.bonus?.length) {
+    params.set("bonus", input.bonus.map((hit) => `${hit.slotId}:${hit.hits}`).join(","));
+  }
   return `/api/tools/share?${params}`;
 }
 

@@ -1,22 +1,20 @@
 /**
- * Sealed booster market for the box EV tool.
- * Lorcana, Riftbound, and Gundam already download this product feed while
- * loading singles, and that path stamps the quote on the cards response.
- * This lookup is the fallback, and the only path for Pokémon and One Piece,
- * whose singles do not come from TCGCSV. Results stay cached for a day so
- * a page view does not refetch the category.
+ * Sealed products for the box EV tool, one offer per TCGCSV SKU.
+ * Cached for a day so a page view does not refetch the category.
+ * Pokémon and One Piece singles do not come from TCGCSV, so this is their
+ * only sealed-product path. The other games use it too, so the selector
+ * can list every product instead of the single cheapest box.
  */
 
 import { TcgcsvApiError, TCGCSV_BASE, fetchTcgcsvJson } from "@/lib/catalog/tcgcsv";
 import {
   matchTcgcsvGroup,
-  selectSealedBoosterBox,
-  type SealedBoxQuote,
   type SealedGroup,
   type SealedPriceRow,
   type SealedProduct,
 } from "@/lib/catalog/sealedBox";
 import type { ToolCategoryId } from "./categories";
+import { buildSealedOffers, type SealedOffer } from "./sealedProducts";
 import { readToolJson, writeToolJson } from "./toolStore";
 
 const USER_AGENT = "ChaseCards/1.0 (sealed box estimate; +https://chasecards.online)";
@@ -30,13 +28,12 @@ const TCGCSV_CATEGORY: Record<ToolCategoryId, number> = {
   gundam: 86,
 };
 
-type StoredQuote = {
+type StoredList = {
   at: number;
-  marketPrice: number | null;
-  name: string | null;
+  offers: SealedOffer[];
 };
 
-const memoryQuotes = new Map<string, StoredQuote>();
+const memoryQuotes = new Map<string, StoredList>();
 const groupsCache = new Map<number, { at: number; groups: SealedGroup[] }>();
 
 function resultsOf(payload: unknown): unknown[] {
@@ -61,22 +58,12 @@ function asGroups(payload: unknown): SealedGroup[] {
   return groups;
 }
 
-function freshStored(value: unknown, now: number): StoredQuote | null {
+function freshStored(value: unknown, now: number): StoredList | null {
   if (!value || typeof value !== "object") return null;
-  const row = value as Partial<StoredQuote>;
+  const row = value as Partial<StoredList>;
   if (typeof row.at !== "number" || now - row.at > QUOTE_TTL_MS) return null;
-  if (row.marketPrice !== null && typeof row.marketPrice !== "number") return null;
-  if (row.name !== null && typeof row.name !== "string") return null;
-  return {
-    at: row.at,
-    marketPrice: row.marketPrice ?? null,
-    name: row.name ?? null,
-  };
-}
-
-function quoteFromStored(row: StoredQuote): SealedBoxQuote | null {
-  if (typeof row.marketPrice !== "number" || !row.name) return null;
-  return { marketPrice: row.marketPrice, name: row.name, productId: 0 };
+  if (!Array.isArray(row.offers)) return null;
+  return { at: row.at, offers: row.offers };
 }
 
 async function loadGroups(categoryId: number): Promise<SealedGroup[]> {
@@ -90,7 +77,12 @@ async function loadGroups(categoryId: number): Promise<SealedGroup[]> {
   return groups;
 }
 
-async function quoteForGroup(categoryId: number, groupId: number): Promise<SealedBoxQuote | null> {
+async function offersForGroup(
+  category: ToolCategoryId,
+  categoryId: number,
+  groupId: number,
+  set: { id: string; name?: string | null },
+): Promise<SealedOffer[]> {
   const productsPayload = await fetchTcgcsvJson(
     `${TCGCSV_BASE}/tcgplayer/${categoryId}/${groupId}/products`,
     USER_AGENT,
@@ -99,24 +91,25 @@ async function quoteForGroup(categoryId: number, groupId: number): Promise<Seale
     `${TCGCSV_BASE}/tcgplayer/${categoryId}/${groupId}/prices`,
     USER_AGENT,
   );
-  return selectSealedBoosterBox(
+  return buildSealedOffers(
     resultsOf(productsPayload) as SealedProduct[],
     resultsOf(pricesPayload) as SealedPriceRow[],
+    { category, id: set.id, name: set.name },
   );
 }
 
-export async function lookupSealedBoxMarket(input: {
+export async function lookupSealedProducts(input: {
   category: ToolCategoryId;
   setId: string;
   setName?: string | null;
-}): Promise<SealedBoxQuote | null> {
+}): Promise<SealedOffer[]> {
   const setId = input.setId.trim();
-  const key = `sealed-box/${input.category}/${setId}`;
+  const key = `sealed-products/v2/${input.category}/${setId}`;
   const now = Date.now();
   const remembered = freshStored(memoryQuotes.get(key), now) ?? freshStored(await readToolJson(key), now);
   if (remembered) {
     memoryQuotes.set(key, remembered);
-    return quoteFromStored(remembered);
+    return remembered.offers;
   }
 
   const categoryId = TCGCSV_CATEGORY[input.category];
@@ -127,17 +120,14 @@ export async function lookupSealedBoxMarket(input: {
     const groups = await loadGroups(categoryId);
     groupId = matchTcgcsvGroup(groups, { id: setId, name: input.setName })?.groupId ?? null;
   }
-  const quote = groupId === null ? null : await quoteForGroup(categoryId, groupId);
-  const stored: StoredQuote = {
-    at: now,
-    marketPrice: quote?.marketPrice ?? null,
-    name: quote?.name ?? null,
-  };
+  const offers =
+    groupId === null ? [] : await offersForGroup(input.category, categoryId, groupId, { id: setId, name: input.setName });
+  const stored: StoredList = { at: now, offers };
   memoryQuotes.set(key, stored);
   try {
     await writeToolJson(key, stored);
   } catch (err) {
-    console.error("sealed box cache write failed:", err);
+    console.error("sealed product cache write failed:", err);
   }
-  return quote;
+  return offers;
 }

@@ -22,6 +22,7 @@ type ShareCopy = {
   price: string;
   verdict: string;
   note: string;
+  badge?: string | null;
   disclaimer?: string | null;
 };
 
@@ -88,12 +89,13 @@ export async function shareImageResponse(copy: ShareCopy): Promise<ImageResponse
         <div
           style={{
             display: "flex",
+            flexWrap: "wrap",
             marginTop: 18,
-            fontSize: tall ? 64 : 52,
-            lineHeight: 1.15,
+            fontSize: tall ? 48 : 40,
+            lineHeight: 1.2,
           }}
         >
-          {clip(copy.title, tall ? 80 : 64)}
+          {clip(copy.title, 140)}
         </div>
         <div style={{ display: "flex", marginTop: 16, fontSize: 28, color: "#334155" }}>
           {clip(copy.subtitle, 90)}
@@ -104,7 +106,7 @@ export async function shareImageResponse(copy: ShareCopy): Promise<ImageResponse
         <div style={{ display: "flex", marginTop: 8, fontSize: tall ? 68 : 56 }}>
           {clip(copy.price, 24)}
         </div>
-        <div style={{ display: "flex", marginTop: "auto" }}>
+        <div style={{ display: "flex", marginTop: "auto", alignItems: "center" }}>
           <div
             style={{
               display: "flex",
@@ -117,9 +119,24 @@ export async function shareImageResponse(copy: ShareCopy): Promise<ImageResponse
           >
             {clip(copy.verdict, 32)}
           </div>
+          {copy.badge ? (
+            <div
+              style={{
+                display: "flex",
+                marginLeft: 16,
+                background: "#fff7ed",
+                color: "#9a3412",
+                fontSize: 22,
+                padding: "10px 18px",
+                borderRadius: 999,
+              }}
+            >
+              {clip(copy.badge, 32)}
+            </div>
+          ) : null}
         </div>
         <div style={{ display: "flex", marginTop: 22, fontSize: 20, color: "#475569" }}>
-          {clip(copy.note, 140)}
+          {clip(copy.note, 180)}
         </div>
         {disclaimer ? (
           <div style={{ display: "flex", marginTop: 14, fontSize: 16, color: "#64748b", lineHeight: 1.35 }}>

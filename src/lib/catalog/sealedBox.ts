@@ -61,7 +61,8 @@ export function isStandardBoosterBoxName(name: string): boolean {
   return /\bbooster box(?:es)?\b/.test(text) || /\bbooster display\b/.test(text);
 }
 
-function marketForProduct(rows: readonly SealedPriceRow[]): number | null {
+/** Normal subtype when it has a market. Otherwise the lowest other subtype. */
+export function sealedMarketPrice(rows: readonly SealedPriceRow[]): number | null {
   let normal: number | null = null;
   let other: number | null = null;
   for (const row of rows) {
@@ -98,7 +99,7 @@ export function selectSealedBoosterBox(
     if (hasCollectorNumber(product)) continue;
     const name = (product.name || "").trim();
     if (!name || !isStandardBoosterBoxName(name)) continue;
-    const marketPrice = marketForProduct(pricesByProduct.get(product.productId) || []);
+    const marketPrice = sealedMarketPrice(pricesByProduct.get(product.productId) || []);
     if (marketPrice === null) continue;
     if (!best || marketPrice < best.marketPrice) {
       best = { marketPrice, name, productId: product.productId };

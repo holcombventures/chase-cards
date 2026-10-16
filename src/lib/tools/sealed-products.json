@@ -1,0 +1,339 @@
+{
+  "games": {
+    "pokemon": {
+      "specialSetNames": [
+        "151",
+        "paldean fates",
+        "crown zenith",
+        "prismatic evolutions",
+        "ascended heroes",
+        "30th celebration",
+        "shrouded fable",
+        "celebrations",
+        "shining fates",
+        "hidden fates"
+      ],
+      "hideOnSpecial": ["booster-box", "half-box"],
+      "prefer": ["booster-box", "booster-bundle", "elite-trainer-box", "pokemon-center-etb"],
+      "preferOnSpecial": ["booster-bundle", "elite-trainer-box", "pokemon-center-etb"],
+      "products": [
+        {
+          "id": "pokemon-center-etb",
+          "label": "Pokémon Center ETB",
+          "packs": 11,
+          "ev": "packs",
+          "accessories": true,
+          "promo": true,
+          "match": "pokemon center elite trainer box",
+          "reject": ["case"]
+        },
+        {
+          "id": "elite-trainer-box",
+          "label": "Elite Trainer Box",
+          "packs": 9,
+          "ev": "packs",
+          "accessories": true,
+          "promo": true,
+          "match": "elite trainer box",
+          "reject": ["case", "pokemon center"]
+        },
+        {
+          "id": "booster-bundle",
+          "label": "Booster Bundle",
+          "packs": 6,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster bundle",
+          "reject": ["case", "display", "surprise", "costco", "sam's"]
+        },
+        {
+          "id": "half-box",
+          "label": "Half Booster Box",
+          "packs": 18,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "half booster box",
+          "reject": ["case"]
+        },
+        {
+          "id": "booster-box",
+          "label": "Booster Box",
+          "packs": 36,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster box",
+          "reject": ["case", "half", "bundle", "display"]
+        },
+        {
+          "id": "blister-3",
+          "label": "3-Pack Blister",
+          "packs": 3,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "3-pack blister",
+          "reject": ["case"]
+        },
+        {
+          "id": "blister-2",
+          "label": "2-Pack Blister",
+          "packs": 2,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "2-pack blister",
+          "reject": ["case"]
+        },
+        {
+          "id": "pack-bundle",
+          "label": "Pack Bundle",
+          "packs": 4,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "art bundle",
+          "reject": ["case"]
+        },
+        {
+          "id": "sleeved-pack",
+          "label": "Sleeved Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "sleeved booster pack",
+          "reject": ["case", "art bundle"]
+        },
+        {
+          "id": "booster-pack",
+          "label": "Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster pack",
+          "reject": ["case", "box", "bundle", "blister", "sleeved", "art bundle"]
+        }
+      ]
+    },
+    "one-piece": {
+      "specialSetNames": [],
+      "hideOnSpecial": [],
+      "prefer": ["booster-box", "sleeved-pack", "booster-pack"],
+      "preferOnSpecial": [],
+      "products": [
+        {
+          "id": "booster-box",
+          "label": "Booster Box",
+          "packs": 24,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster box",
+          "reject": ["case", "half"]
+        },
+        {
+          "id": "sleeved-pack",
+          "label": "Sleeved Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "sleeved booster pack",
+          "reject": ["case"]
+        },
+        {
+          "id": "booster-pack",
+          "label": "Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster pack",
+          "reject": ["case", "box", "sleeved"]
+        }
+      ]
+    },
+    "lorcana": {
+      "specialSetNames": [],
+      "hideOnSpecial": [],
+      "prefer": ["booster-box", "trove", "sleeved-pack", "booster-pack"],
+      "preferOnSpecial": [],
+      "products": [
+        {
+          "id": "booster-box",
+          "label": "Booster Box",
+          "packs": 24,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster box",
+          "reject": ["case"]
+        },
+        {
+          "id": "trove",
+          "label": "Illumineer's Trove",
+          "packs": 8,
+          "ev": "packs",
+          "accessories": true,
+          "promo": false,
+          "match": "trove",
+          "reject": ["case"]
+        },
+        {
+          "id": "sleeved-pack",
+          "label": "Sleeved Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "sleeved booster pack",
+          "reject": ["case"]
+        },
+        {
+          "id": "booster-pack",
+          "label": "Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster pack",
+          "reject": ["case", "box", "sleeved"]
+        }
+      ]
+    },
+    "riftbound": {
+      "specialSetNames": [],
+      "hideOnSpecial": [],
+      "prefer": ["booster-display", "sleeved-pack", "booster-pack"],
+      "preferOnSpecial": [],
+      "products": [
+        {
+          "id": "booster-display",
+          "label": "Booster Display",
+          "packs": 24,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster display",
+          "reject": ["case"]
+        },
+        {
+          "id": "sleeved-pack",
+          "label": "Sleeved Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "sleeved booster pack",
+          "reject": ["case", "art bundle"]
+        },
+        {
+          "id": "booster-pack",
+          "label": "Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster pack",
+          "reject": ["case", "display", "sleeved", "art bundle"]
+        }
+      ]
+    },
+    "gundam": {
+      "specialSetNames": [],
+      "hideOnSpecial": [],
+      "prefer": ["edition-beta-box", "booster-box", "edition-beta-pack", "booster-pack"],
+      "preferOnSpecial": [],
+      "products": [
+        {
+          "id": "edition-beta-box",
+          "label": "Edition Beta Box",
+          "packs": 16,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "edition beta box",
+          "reject": ["case"]
+        },
+        {
+          "id": "edition-beta-pack",
+          "label": "Edition Beta Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "edition beta pack",
+          "reject": ["case"]
+        },
+        {
+          "id": "booster-box",
+          "label": "Booster Box",
+          "packs": 24,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster box",
+          "reject": ["case", "half"]
+        },
+        {
+          "id": "sleeved-pack",
+          "label": "Sleeved Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "sleeved booster pack",
+          "reject": ["case"]
+        },
+        {
+          "id": "booster-pack",
+          "label": "Booster Pack",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "booster pack",
+          "reject": ["case", "box", "sleeved", "edition beta"]
+        }
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "game": "one-piece",
+      "setIdPrefix": "PRB-",
+      "setNameIncludes": "premium booster",
+      "productId": "booster-box",
+      "packs": 20,
+      "cardsPerPack": 10,
+      "rateTable": "one-piece-prb",
+      "note": "Unconfirmed estimate. Premium Booster is modeled as 20 packs of 10 cards, not a 24-pack main set."
+    },
+    {
+      "game": "gundam",
+      "setIdPrefix": "",
+      "setNameIncludes": "edition beta",
+      "productId": "edition-beta-box",
+      "packs": 16,
+      "cardsPerPack": 9,
+      "rateTable": "gundam-edition-beta",
+      "bonus": [{ "slotId": "legend", "hits": 1 }],
+      "note": "Unconfirmed estimate. Edition Beta is 16 packs of 9 cards, plus 1 random Legend Rare in the box."
+    },
+    {
+      "game": "gundam",
+      "setIdPrefix": "",
+      "setNameIncludes": "edition beta",
+      "productId": "edition-beta-pack",
+      "packs": 1,
+      "cardsPerPack": 9,
+      "rateTable": "gundam-edition-beta",
+      "bonus": [],
+      "note": "Unconfirmed estimate. A loose Edition Beta pack is 9 cards and does not include the box's guaranteed Legend Rare."
+    }
+  ]
+}

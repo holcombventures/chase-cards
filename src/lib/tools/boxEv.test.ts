@@ -6,7 +6,11 @@ import {
   boxPriceRatio,
   classifyCard,
   cloneBoxDefaults,
+  exactPriceSource,
   modelBoxEv,
+  PRICE_SOURCE_LABEL,
+  rateTableIsUnconfirmed,
+  slotsForRate,
   type EvCard,
 } from "./boxEv";
 import { TOOL_CATEGORY_IDS } from "./categories";
@@ -108,6 +112,33 @@ test("cited hit counts stay at one copy of the published rate", () => {
   assert.ok(Math.abs(hits("gundam", "legend") - 8) < 1e-9);
   assert.ok(Math.abs(hits("gundam", "sp") - 0.2) < 1e-9);
   assert.ok(Math.abs(hits("gundam", "lr-plus-plus") - 1 / 12) < 1e-9);
+});
+
+test("premium booster and edition beta use their own rate tables", () => {
+  const prb = slotsForRate("one-piece", "one-piece-prb");
+  assert.equal(prb.find((slot) => slot.id === "leader")?.hitsPerPack, 5 / 20);
+  assert.equal(prb.find((slot) => slot.id === "common")?.hitsPerPack, 4);
+  assert.equal(rateTableIsUnconfirmed("one-piece-prb"), true);
+  const beta = slotsForRate("gundam", "gundam-edition-beta");
+  assert.equal(beta.find((slot) => slot.id === "legend")?.hitsPerPack, 0);
+  assert.equal(beta.find((slot) => slot.id === "common")?.hitsPerPack, 5);
+  assert.equal(rateTableIsUnconfirmed("gundam-edition-beta"), true);
+  assert.equal(rateTableIsUnconfirmed("standard"), false);
+  assert.equal(exactPriceSource(1), PRICE_SOURCE_LABEL);
+  assert.equal(exactPriceSource(6), `${PRICE_SOURCE_LABEL} × 6 products`);
+});
+
+test("a guaranteed extra hit is added once, not once per pack", () => {
+  const cards = [card({ id: "lr", rarity: "Legend Rare", marketPrice: 10 })];
+  const model = modelBoxEv({
+    cards,
+    packsPerBox: 16,
+    slots: [{ id: "legend", label: "Legend Rare", hitsPerPack: 0 }],
+    classify: (item) => (item.rarity === "Legend Rare" ? "legend" : "other"),
+    bonusHits: [{ slotId: "legend", hits: 1 }],
+  });
+  assert.equal(model.rows[0]?.hitsPerBox, 1);
+  assert.equal(model.modeledEv, 10);
 });
 
 test("a zero hit rate and a zero pack count add nothing", () => {
