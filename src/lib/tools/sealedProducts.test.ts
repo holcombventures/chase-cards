@@ -5,7 +5,6 @@ import {
   buildSealedOffers,
   isSpecialPokemonSet,
   offerChoiceLabel,
-  omittedFixedCount,
   pickDefaultOffer,
   productResultTitle,
   promoMarketFromCards,
@@ -41,6 +40,7 @@ test("a normal Pokémon set lists the booster box and prices that exact sku", ()
   assert.equal(pickDefaultOffer(visible, { category: "pokemon", id: "me5", name: "Pitch Black" })?.name, "Pitch Black Booster Box");
   assert.equal(visible.find((offer) => offer.typeId === "booster-box")?.packs, 36);
   assert.equal(visible.find((offer) => offer.typeId === "booster-box")?.marketPrice, 182.12);
+  assert.equal(visible.find((offer) => offer.typeId === "booster-box")?.caseCount, 6);
   assert.equal(visible.some((offer) => /case/i.test(offer.name)), false);
   assert.equal(visible.find((offer) => offer.typeId === "elite-trainer-box")?.accessories, true);
   assert.equal(
@@ -68,9 +68,11 @@ test("Pokémon special sets hide booster boxes and open on a bundle or ETB", () 
     { category: "pokemon", id: "sv8pt5", name: "Prismatic Evolutions" },
   );
   assert.equal(offers.some((offer) => offer.typeId === "booster-box"), false);
+  assert.equal(offers.some((offer) => offer.typeId === "enhanced-booster"), false);
   const visible = visibleOffers(offers);
-  assert.equal(visible.some((offer) => /mini tin|collection/i.test(offer.name)), false);
-  assert.ok(omittedFixedCount(offers) >= 2);
+  assert.equal(visible.find((offer) => offer.typeId === "mini-tin")?.packs, 2);
+  assert.match(visible.find((offer) => offer.typeId === "mini-tin")?.note || "", /not verified/);
+  assert.equal(visible.find((offer) => offer.typeId === "super-premium")?.packs, 15);
   const chosen = pickDefaultOffer(offers, { category: "pokemon", id: "sv8pt5", name: "Prismatic Evolutions" });
   assert.equal(chosen?.typeId, "booster-bundle");
   assert.equal(chosen?.packs, 6);
@@ -95,6 +97,8 @@ test("fixed and mixed products are called out instead of given a pack EV", () =>
       product(2, "Disney Lorcana: Attack of the Vine! Illumineer's Trove"),
       product(3, "Disney Lorcana: Attack of the Vine! Collection Starter Set - Rapunzel Edition"),
       product(4, "Disney Lorcana: Attack of the Vine! Prerelease Box"),
+      product(5, "Disney Lorcana: Gift Box"),
+      product(6, "Disney Lorcana: Amber Starter Deck"),
     ],
     [price(1, 193.77), price(2, 86), price(3, 37), price(4, 59)],
     { category: "lorcana", id: "24666", name: "Attack of the Vine!" },
@@ -108,7 +112,55 @@ test("fixed and mixed products are called out instead of given a pack EV", () =>
   );
   assert.equal(visible.find((offer) => offer.typeId === "trove")?.packs, 8);
   assert.equal(visible.find((offer) => offer.typeId === "trove")?.accessories, true);
-  assert.equal(visible.some((offer) => /starter|prerelease/i.test(offer.name)), false);
+  assert.equal(visible.find((offer) => offer.typeId === "prerelease")?.packs, 6);
+  assert.equal(visible.find((offer) => offer.typeId === "prerelease")?.promo, true);
+  assert.equal(visible.some((offer) => /collection starter/i.test(offer.name)), false);
+  assert.equal(lorcana.find((offer) => /gift box/i.test(offer.name))?.evApplies, false);
+  assert.equal(visible.find((offer) => offer.typeId === "starter-deck")?.packs, 2);
+  assert.equal(box?.caseCount, 4);
+});
+
+test("a build and battle keeps four packs and a plain tin does not", () => {
+  const offers = buildSealedOffers(
+    [product(1, "Pitch Black Build & Battle Box"), product(2, "Pitch Black Tin")],
+    [price(1, 25), price(2, 20)],
+    { category: "pokemon", id: "me5", name: "Pitch Black" },
+  );
+  assert.equal(offers.find((offer) => offer.typeId === "build-and-battle")?.packs, 4);
+  assert.equal(offers.find((offer) => offer.name === "Pitch Black Tin")?.evApplies, false);
+});
+
+test("partial products use a known pack count and leave fixed contents out of EV", () => {
+  const onePiece = buildSealedOffers(
+    [product(1, "Extra Booster Box"), product(2, "Double Pack Set"), product(3, "Starter Deck")],
+    [price(1, 90), price(2, 12), price(3, 15)],
+    { category: "one-piece", id: "EB-01", name: "Extra Booster" },
+  );
+  assert.equal(onePiece.find((offer) => offer.typeId === "extra-booster")?.packs, 24);
+  assert.equal(onePiece.find((offer) => offer.typeId === "extra-booster")?.caseCount, 12);
+  assert.equal(onePiece.find((offer) => offer.typeId === "double-pack")?.packs, 2);
+  assert.equal(onePiece.find((offer) => offer.name === "Starter Deck")?.evApplies, false);
+
+  const rift = buildSealedOffers(
+    [
+      product(1, "Vendetta - Vault"),
+      product(2, "Vendetta - Pre-Rift Kit"),
+      product(3, "Vendetta - Showdown"),
+    ],
+    [price(1, 40), price(2, 30), price(3, 25)],
+    { category: "riftbound", id: "24698", name: "Vendetta" },
+  );
+  assert.equal(rift.find((offer) => offer.typeId === "vault")?.packs, 6);
+  assert.equal(rift.find((offer) => offer.typeId === "vault")?.accessories, true);
+  assert.equal(rift.find((offer) => offer.typeId === "pre-rift")?.packs, 5);
+  assert.equal(rift.find((offer) => offer.typeId === "showdown")?.packs, 2);
+
+  const anniversary = buildSealedOffers(
+    [product(1, "1st Anniversary Set"), product(2, "Premium Collection")],
+    [price(1, 50), price(2, 80)],
+    { category: "gundam", id: "24699", name: "Freedom Ascension" },
+  );
+  assert.equal(anniversary.every((offer) => offer.evApplies === false), true);
 });
 
 test("Premium Booster and Edition Beta use their own pack counts", () => {
@@ -126,6 +178,7 @@ test("Premium Booster and Edition Beta use their own pack counts", () => {
   assert.equal(boxes[0].packs, 20);
   assert.equal(boxes[0].cardsPerPack, 10);
   assert.equal(boxes[0].rateTable, "one-piece-prb");
+  assert.match(boxes[0].note || "", /not verified/);
   assert.equal(pickDefaultOffer(prb, { category: "one-piece", id: "PRB-01", name: "Premium Booster" })?.marketPrice, 80);
   assert.equal(offerChoiceLabel(boxes[0], prb), boxes[0].name);
 
@@ -139,6 +192,7 @@ test("Premium Booster and Edition Beta use their own pack counts", () => {
   assert.equal(box?.cardsPerPack, 9);
   assert.equal(box?.rateTable, "gundam-edition-beta");
   assert.deepEqual(box?.bonus, [{ slotId: "legend", hits: 1 }]);
+  assert.match(box?.note || "", /56 fixed cards/);
   assert.equal(beta.find((offer) => offer.typeId === "edition-beta-pack")?.bonus.length, 0);
   assert.equal(
     productResultTitle("Edition Beta", box!, 16, 1),
@@ -159,6 +213,10 @@ test("Riftbound's sealed unit is the booster display, and a case multiplier stay
   const chosen = pickDefaultOffer(offers, { category: "riftbound", id: "24698", name: "Vendetta" });
   assert.equal(chosen?.typeLabel, "Booster Display");
   assert.equal(chosen?.packs, 24);
+  const champion = offers.find((offer) => offer.typeId === "champion-deck");
+  assert.equal(champion?.packs, 1);
+  assert.equal(champion?.evApplies, true);
+  assert.match(champion?.note || "", /deck is not valued/);
   assert.equal(
     productResultTitle("Vendetta", chosen!, 24, 6),
     "Vendetta · Booster Display (24 packs) × 6",

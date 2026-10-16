@@ -13,8 +13,8 @@
         "shining fates",
         "hidden fates"
       ],
-      "hideOnSpecial": ["booster-box", "half-box"],
-      "prefer": ["booster-box", "booster-bundle", "elite-trainer-box", "pokemon-center-etb"],
+      "hideOnSpecial": ["booster-box", "half-box", "enhanced-booster"],
+      "prefer": ["booster-box", "enhanced-booster", "booster-bundle", "elite-trainer-box", "pokemon-center-etb"],
       "preferOnSpecial": ["booster-bundle", "elite-trainer-box", "pokemon-center-etb"],
       "products": [
         {
@@ -25,7 +25,8 @@
           "accessories": true,
           "promo": true,
           "match": "pokemon center elite trainer box",
-          "reject": ["case"]
+          "reject": ["case"],
+          "note": "Pack EV uses 11 packs. Two promos are reported. The optional add-on prices one named card, and accessories are not valued."
         },
         {
           "id": "elite-trainer-box",
@@ -35,7 +36,32 @@
           "accessories": true,
           "promo": true,
           "match": "elite trainer box",
-          "reject": ["case", "pokemon center"]
+          "reject": ["case", "pokemon center"],
+          "note": "Pack EV uses 9 packs. One full-art promo is reported and is optional. Accessories are not valued."
+        },
+        {
+          "id": "build-and-battle",
+          "label": "Build & Battle",
+          "packs": 4,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "build & battle",
+          "aliases": ["build and battle"],
+          "reject": ["case"],
+          "note": "Pack EV uses 4 packs. The 40-card deck is not valued. One of four promos is optional."
+        },
+        {
+          "id": "enhanced-booster",
+          "label": "Enhanced Booster Display",
+          "packs": 36,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "enhanced booster",
+          "reject": ["case"],
+          "caseCount": 6,
+          "note": "Pack EV uses 36 packs. One promo is reported and is optional."
         },
         {
           "id": "booster-bundle",
@@ -58,6 +84,41 @@
           "reject": ["case"]
         },
         {
+          "id": "super-premium",
+          "label": "Super-Premium Collection",
+          "packs": 15,
+          "ev": "packs",
+          "accessories": true,
+          "promo": false,
+          "match": "super premium collection",
+          "aliases": ["super-premium collection"],
+          "reject": ["case"],
+          "note": "Pack EV uses 15 packs. Other contents are not valued."
+        },
+        {
+          "id": "ultra-premium",
+          "label": "Ultra-Premium Collection",
+          "packs": 16,
+          "ev": "packs",
+          "accessories": true,
+          "promo": false,
+          "match": "ultra premium collection",
+          "aliases": ["ultra-premium collection"],
+          "reject": ["case"],
+          "note": "Pack EV uses 16 packs. Other contents are not valued."
+        },
+        {
+          "id": "mini-tin",
+          "label": "Mini Tin",
+          "packs": 2,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "mini tin",
+          "reject": ["case"],
+          "note": "Estimate. Mini tin pack counts are not verified. Pack EV uses 2 packs."
+        },
+        {
           "id": "booster-box",
           "label": "Booster Box",
           "packs": 36,
@@ -65,7 +126,9 @@
           "accessories": false,
           "promo": false,
           "match": "booster box",
-          "reject": ["case", "half", "bundle", "display"]
+          "aliases": ["booster display box"],
+          "reject": ["case", "half", "bundle", "enhanced"],
+          "caseCount": 6
         },
         {
           "id": "blister-3",
@@ -85,6 +148,16 @@
           "accessories": false,
           "promo": true,
           "match": "2-pack blister",
+          "reject": ["case"]
+        },
+        {
+          "id": "blister-1",
+          "label": "1-Pack Blister",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "1-pack blister",
           "reject": ["case"]
         },
         {
@@ -122,9 +195,32 @@
     "one-piece": {
       "specialSetNames": [],
       "hideOnSpecial": [],
-      "prefer": ["booster-box", "sleeved-pack", "booster-pack"],
+      "prefer": ["extra-booster", "booster-box", "double-pack", "sleeved-pack", "booster-pack"],
       "preferOnSpecial": [],
       "products": [
+        {
+          "id": "extra-booster",
+          "label": "Extra Booster",
+          "packs": 24,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "extra booster",
+          "reject": ["case"],
+          "caseCount": 12,
+          "note": "Extra Booster is its own set. Bandai publishes no English rates, so this uses the same community estimates as a main set."
+        },
+        {
+          "id": "double-pack",
+          "label": "Double Pack",
+          "packs": 2,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "double pack",
+          "reject": ["case"],
+          "note": "Pack EV uses 2 packs. The DON!! card is not in the pack EV."
+        },
         {
           "id": "booster-box",
           "label": "Booster Box",
@@ -133,7 +229,8 @@
           "accessories": false,
           "promo": false,
           "match": "booster box",
-          "reject": ["case", "half"]
+          "reject": ["case", "half", "extra", "double"],
+          "caseCount": 12
         },
         {
           "id": "sleeved-pack",
@@ -153,14 +250,14 @@
           "accessories": false,
           "promo": false,
           "match": "booster pack",
-          "reject": ["case", "box", "sleeved"]
+          "reject": ["case", "box", "sleeved", "double"]
         }
       ]
     },
     "lorcana": {
       "specialSetNames": [],
       "hideOnSpecial": [],
-      "prefer": ["booster-box", "trove", "sleeved-pack", "booster-pack"],
+      "prefer": ["booster-box", "trove", "prerelease", "starter-deck", "sleeved-pack", "booster-pack"],
       "preferOnSpecial": [],
       "products": [
         {
@@ -171,7 +268,8 @@
           "accessories": false,
           "promo": false,
           "match": "booster box",
-          "reject": ["case"]
+          "reject": ["case"],
+          "caseCount": 4
         },
         {
           "id": "trove",
@@ -182,6 +280,29 @@
           "promo": false,
           "match": "trove",
           "reject": ["case"]
+        },
+        {
+          "id": "prerelease",
+          "label": "Prerelease Box",
+          "packs": 6,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "prerelease",
+          "aliases": ["pre-release"],
+          "reject": ["case"],
+          "note": "Pack EV uses 6 packs. One promo is optional and off by default."
+        },
+        {
+          "id": "starter-deck",
+          "label": "Starter Deck",
+          "packs": 2,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "starter deck",
+          "reject": ["case", "collection"],
+          "note": "Pack EV uses 2 packs. The fixed deck is not valued."
         },
         {
           "id": "sleeved-pack",
@@ -208,9 +329,54 @@
     "riftbound": {
       "specialSetNames": [],
       "hideOnSpecial": [],
-      "prefer": ["booster-display", "sleeved-pack", "booster-pack"],
+      "prefer": ["booster-display", "vault", "pre-rift", "sleeved-pack", "booster-pack"],
       "preferOnSpecial": [],
       "products": [
+        {
+          "id": "vault",
+          "label": "Vault",
+          "packs": 6,
+          "ev": "packs",
+          "accessories": true,
+          "promo": false,
+          "match": "vault",
+          "reject": ["case"],
+          "note": "Pack EV uses 6 packs. Accessories are not valued."
+        },
+        {
+          "id": "pre-rift",
+          "label": "Pre-Rift Kit",
+          "packs": 5,
+          "ev": "packs",
+          "accessories": false,
+          "promo": true,
+          "match": "pre-rift",
+          "aliases": ["pre rift"],
+          "reject": ["case"],
+          "note": "Pack EV uses 5 packs. The fixed champion pack is not valued. The promo is optional."
+        },
+        {
+          "id": "showdown",
+          "label": "Showdown",
+          "packs": 2,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "showdown",
+          "reject": ["case"],
+          "note": "Pack EV uses 2 packs. The decks are not valued."
+        },
+        {
+          "id": "champion-deck",
+          "label": "Champion Deck",
+          "packs": 1,
+          "ev": "packs",
+          "accessories": false,
+          "promo": false,
+          "match": "champion deck",
+          "reject": ["case"],
+          "note": "Pack EV uses 1 pack. The deck is not valued."
+        },
         {
           "id": "booster-display",
           "label": "Booster Display",
@@ -277,7 +443,8 @@
           "accessories": false,
           "promo": false,
           "match": "booster box",
-          "reject": ["case", "half"]
+          "reject": ["case", "half", "anniversary", "premium collection"],
+          "caseCount": 12
         },
         {
           "id": "sleeved-pack",
@@ -311,7 +478,7 @@
       "packs": 20,
       "cardsPerPack": 10,
       "rateTable": "one-piece-prb",
-      "note": "Unconfirmed estimate. Premium Booster is modeled as 20 packs of 10 cards, not a 24-pack main set."
+      "note": "Unconfirmed estimate. Premium Booster is modeled as 20 packs of 10 cards, not a 24-pack main set. Two foil DON!! cards are reported and not verified, so they are not in the pack EV."
     },
     {
       "game": "gundam",
@@ -322,7 +489,7 @@
       "cardsPerPack": 9,
       "rateTable": "gundam-edition-beta",
       "bonus": [{ "slotId": "legend", "hits": 1 }],
-      "note": "Unconfirmed estimate. Edition Beta is 16 packs of 9 cards, plus 1 random Legend Rare in the box."
+      "note": "Unconfirmed estimate. Edition Beta is 16 packs of 9 cards, plus 1 random Legend Rare. 56 fixed cards are not in the pack EV. $69.99 is a reported price, not the TCGplayer market used here."
     },
     {
       "game": "gundam",
@@ -333,7 +500,7 @@
       "cardsPerPack": 9,
       "rateTable": "gundam-edition-beta",
       "bonus": [],
-      "note": "Unconfirmed estimate. A loose Edition Beta pack is 9 cards and does not include the box's guaranteed Legend Rare."
+      "note": "Unconfirmed estimate. A loose Edition Beta pack is 9 cards and does not include the box's Legend Rare or the 56 fixed cards."
     }
   ]
 }

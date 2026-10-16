@@ -1,81 +1,102 @@
-# Sealed product types for Box EV
+# Sealed product types
 
-Box EV prices one sealed product, not “a box” in the abstract. The same set can list a 36-pack booster box, a 6-pack bundle, an ETB, a single pack, and a case. Those are different TCGplayer SKUs with different pack counts and different market prices. The calculator names the SKU, uses that SKU’s market, and multiplies pack EV by the packs in that product.
+Box EV prices one sealed SKU. Pack EV is packs times the per-pack rates for that set. The verdict uses pack EV only. A promo is an optional add-on and starts off. Accessories and fixed decks count as $0. A product whose packs come from mixed sets, or whose pack list is not known, is not given a pack EV.
 
-Live names and prices come from TCGCSV, the public daily mirror of TCGplayer. Products are matched by name against the type rules in `src/lib/tools/sealed-products.json`. The JSON is keyed by game, then by product type. A set override can change the pack count, cards per pack, rate table, or a guaranteed bonus hit. The page does not ship a frozen copy of every SKU.
+Live names and prices come from TCGCSV. `src/lib/tools/sealed-products.json` holds the type rules below. A set shows only the SKUs that match. Japanese, Chinese, Korean, and Thai SKUs are dropped. A case is not its own choice. The ×N multiplier starts at 1. The case sizes below are estimates and are not verified.
 
-## Pack counts
+Pack counts that this note marks as estimates stay editable.
 
-These are the defaults. The visitor can edit the pack count. A case is not a separate choice. The case multiplier (×N) prices N copies of the selected product and scales pack EV, including a once-per-product bonus, by the same N.
+## Pokémon
 
-| Game | Product | Packs | Notes |
-| --- | --- | --- | --- |
-| Pokémon | Booster box | 36 | Hidden on special sets |
-| Pokémon | Half booster box | 18 | Hidden on special sets |
-| Pokémon | Booster bundle | 6 | Default on special sets when one exists |
-| Pokémon | Elite Trainer Box | 9 | Accessories not valued. Often has a promo |
-| Pokémon | Pokémon Center ETB | 11 | Accessories not valued. Often has a promo |
-| Pokémon | 3-pack blister | 3 | Promo optional |
-| Pokémon | 2-pack blister | 2 | Promo optional |
-| Pokémon | Art bundle | 4 | |
-| Pokémon | Sleeved pack or booster pack | 1 | |
-| One Piece | Booster box | 24 | Premium Booster is 20 packs of 10 cards |
-| One Piece | Sleeved pack or booster pack | 1 | |
-| Lorcana | Booster box | 24 | |
-| Lorcana | Illumineer's Trove | 8 | Accessories not valued |
-| Lorcana | Sleeved pack or booster pack | 1 | |
-| Riftbound | Booster display | 24 | This is the sealed unit. Other “display” names are wholesale and are dropped |
-| Riftbound | Sleeved pack or booster pack | 1 | |
-| Gundam | Booster box | 24 | |
-| Gundam | Edition Beta box | 16 | 9-card packs, plus 1 random Legend Rare in the box |
-| Gundam | Edition Beta pack | 1 | 9 cards. No guaranteed Legend Rare |
-| Gundam | Sleeved pack or booster pack | 1 | |
+Scarlet & Violet and Mega Evolution era packs are 10 cards plus 1 Energy.
 
-EV is packs × per-pack EV at that set’s rate table. The verdict compares the product’s market (×N when a case multiplier is set) with that pack EV only.
+| Product | Packs | EV |
+| --- | --- | --- |
+| Booster display box | 36, no extras | Yes. This is the baseline |
+| Enhanced booster display | 36 plus 1 promo | Yes, plus the promo |
+| Booster bundle | 6 | Yes |
+| Elite Trainer Box | 9 plus 1 full-art promo and accessories | Partial |
+| Pokémon Center ETB | 11 plus 2 promos | Partial |
+| Build & Battle | 4 plus a fixed 40-card deck and 1 of 4 promos | Partial |
+| Sleeved pack, 1-pack blister, 3-pack blister | 1–3 | Yes, or partial when a promo is included |
+| Mini tin | 2 | Partial. The count is an estimate |
+| Other tins and collections | Often 4–10, and often mixed sets | Only when the pack list is known |
+| Super-Premium Collection | 15 | Partial |
+| Ultra-Premium Collection | 16 | Partial |
+| Case | 6 boxes of 36 | Estimate. Not applied until the multiplier is set |
 
-## Pokémon special sets
+Special sets have no 36-pack box. That includes 151, Paldean Fates, Crown Zenith, Prismatic Evolutions, Ascended Heroes, 30th Celebration, and the same kind of set (Shrouded Fable, Celebrations, Shining Fates, Hidden Fates). Those sets hide the booster box and the enhanced display and open on a booster bundle or an ETB.
 
-Some Pokémon sets are not sold as a 36-pack booster box. Confirmed against TCGCSV group names: Scarlet & Violet 151, Paldean Fates, Crown Zenith, Prismatic Evolutions, Ascended Heroes, and 30th Celebration. The same rule covers Shrouded Fable, Celebrations, Shining Fates, and Hidden Fates. A set is special when its name contains one of those phrases.
+Japanese boxes (30 packs of 5 cards) and Chinese gem packs are excluded.
 
-On those sets the selector hides Booster Box and Half Booster Box. The default is a Booster Bundle when one is listed, otherwise an Elite Trainer Box, otherwise a Pokémon Center ETB. Prismatic Evolutions (TCGCSV group 23821, “SV: Prismatic Evolutions”) has a Booster Bundle (6), an ETB (9), and a Pokémon Center ETB (11). It does not have a booster box. Destined Rivals is not special: it has a booster box, so the box stays available.
+A generic tin or collection stays out of pack EV. Mini tin, Super-Premium, and Ultra-Premium are the collection products with a stated pack count. Other tins stay out because the pack list is not in the product name, and tin counts are not verified.
 
-## Products left out
+## One Piece
 
-These are not given a pack EV. When the set has at least one product that EV applies to, they are omitted from the selector and the page says how many were left out, with the sentence “EV not applicable: fixed or mixed contents”. When a set has only those products, they are the choices and the result is that sentence instead of Good buy, Fair, or Overpriced.
+English packs are 12 cards. Bandai publishes no English pull rates, so every One Piece table is a community estimate.
 
-Left out:
+| Product | Packs | EV |
+| --- | --- | --- |
+| Booster box | 24 | Yes. Baseline |
+| Extra Booster | 24, its own set | Yes, on that set's card prices, with the same community rate table |
+| Premium Booster | 20 packs of 10 cards | Its own rate model. Two foil DON!! cards are reported and not verified, so they are not in the pack EV |
+| Double Pack | 2 plus 1 DON!! | Partial. The DON!! card is not in the pack EV |
+| Starter decks | Fixed deck | No |
+| Case | 12 boxes of 24 | Estimate |
 
-- Code cards, and anything with a collector number or a card rarity (singles, including One Piece DON!! cards).
-- Japanese, Chinese, Korean, and Thai SKUs.
-- Anything with “case” in the name. Buyers use the ×N multiplier instead.
-- Wholesale “display” SKUs that are not a “booster display”.
-- Starter decks, Proving Grounds, champion decks, Lorcana gift boxes, collection starter sets, and prerelease boxes.
-- Mixed-set Pokémon tins and collections, unless the name matches a known pack product such as a bundle or blister. A tin whose pack list is not in the product name stays fixed.
-- Event and anniversary bundles, build and battle kits, and deck build boxes.
-- Surprise and club bundles (Costco, Sam’s) that are not a plain booster bundle.
+Japanese product is excluded.
 
-Riftbound Origins Proving Grounds is a box set plus a case. Both drop out of pack EV, so the only result is the fixed-contents note.
+## Lorcana
 
-## Promo, accessories, and the verdict
+Packs are 12 cards. A booster box is 24 packs. The reported MSRP is $143.76. The calculator uses the TCGplayer market for the SKU, not that MSRP.
 
-The verdict uses pack EV only.
+| Product | Packs | EV |
+| --- | --- | --- |
+| Booster box | 24 | Yes |
+| Illumineer's Trove | 8 plus accessories | Partial |
+| Prerelease box | 6 plus 1 promo | Partial |
+| Gift box | 5, from mixed older sets | No |
+| Collection Starter Set | 4, mixed sets | No |
+| Starter deck | 2 plus a fixed deck | Partial. Packs only |
+| Case | 4 boxes of 24 | Estimate |
 
-A promo is optional and off by default. It applies to ETBs and pack blisters, which are flagged `promo` in the type table. When the visitor turns it on, the add-on is the median TCGplayer market of cards whose name matches the bracket in the SKU, for example `[Umbreon]`. If nothing matches, the line says the promo price is unknown and the add-on is $0. Either way it stays out of the verdict.
+## Riftbound
 
-Sleeves, dice, energy, and the box itself are accessories. ETBs, Pokémon Center ETBs, and the Illumineer's Trove are labeled “Accessories not valued” and those extras count as $0.
+Packs are 14 cards. Riot's Origins rates, used for a booster display: an Epic in about 1 of 4 packs, about 2 alt arts per display, an overnumbered card in about 1 of 72 packs (about one display in three), and a signature in about 1 of 720 packs.
 
-## One Piece Premium Booster
+| Product | Packs | EV |
+| --- | --- | --- |
+| Booster display | 24 | Yes. This is the sealed unit |
+| Vault | 6 plus accessories | Partial |
+| Pre-Rift Kit | 5 plus a fixed champion pack and a promo | Partial |
+| Champion deck | 1 plus a fixed deck | Partial |
+| Showdown | 2 plus decks | Partial |
+| Sleeved booster | 1 | Yes |
+| Proving Grounds and event bundles | Fixed or mixed | No |
 
-PRB-01 and PRB-02 (TCGCSV groups 23496 and 24305) sell a “Premium Booster - Booster Box”, a case, a pack, and a sleeved pack, plus DON!! cards. The box is 20 packs of 10 cards, not a 24-pack main-set box. The rate table `one-piece-prb` is an unconfirmed estimate: 4 common, 3 uncommon, 1.5 rare, 7 super rare, 5 leader, 2 secret, 3 alternate art, and 0.25 case-hit per 20 packs. It is labeled an estimate on the result.
+No case size is listed for Riftbound.
 
-## Gundam Edition Beta
+## Gundam
 
-Edition Beta (TCGCSV group 24193, abbreviation GD01_b) lists “Gundam Card Game Edition Beta Box” and “Edition Beta Pack”. The box is 16 packs of 9 cards plus one guaranteed random Legend Rare. That Legend Rare is a bonus hit on the box, once per box, not a per-pack rate. A loose Edition Beta pack is one 9-card pack and does not include the Legend Rare. The `gundam-edition-beta` table (5 common, 3 uncommon, 1 rare, chase slots at 0, plus the box bonus) is an unconfirmed estimate.
+A normal pack is 12 cards plus 1. A booster box is 24 packs. Starter decks are not given an EV.
 
-## Rates and the price line
+Edition Beta is its own model: 16 beta packs of 9 cards, 56 fixed cards, and 1 random Legend Rare. The reported price is $69.99. Pack EV uses the 16 packs plus the one Legend Rare. The 56 fixed cards are not valued. The price in the calculator is the TCGplayer market, not $69.99.
 
-Every result uses the set’s rate table and shows an “Estimated rates” badge. Published pack structures (Pokémon TCGplayer Infinite, Ravensburger’s 12-card pack, Riot’s Origins notes) and community opening counts are starting points. They are not official odds, and the visitor can edit hits per pack. Unconfirmed tables say so in the product note.
+The 1st Anniversary Set and Premium Collections are not given an EV.
 
-The price starts from the Normal TCGplayer market for that exact product (the lowest other subtype if Normal is missing). The result and the share image name the product and the pack count, for example “Pitch Black · Booster Box (36 packs)”, and include “Price source: TCGplayer sealed market for this exact product”. When the case multiplier is above 1, the source line adds “× N products” and the title adds “× N”.
+A case is typically 12 boxes of 24. That size is an estimate.
 
-Lorcana and Riftbound stay free and keep their fan notices on the result and the share image.
+## Not verified
+
+These stay labeled as estimates:
+
+- The Premium Booster foil DON!! guarantee, and the Premium Booster rates
+- Pokémon tin pack counts, including the mini tin's 2 packs
+- Gundam 1st Anniversary Set contents
+- Case sizes: Pokémon ×6, One Piece ×12, Lorcana ×4, Gundam ×12
+
+## Sources
+
+pokemoncenter.store, pokemon.com product galleries, ForeverGeek (Pokémon Center ETB), TCG Gilbert (ETB), en.onepiece-cardgame.com, opboxindex.com, Rarewaves (Premium Booster), ravensburger.us, icv2.com, disneylorcana.com, merch.riotgames.com, riftbound.org, gundam-gcg.com, gundamcard.gg/edition-beta.
+
+Pull-rate starting points for the main sets are cited in `src/lib/tools/boxEv.ts`. Premium Booster and Edition Beta use separate tables and are marked unconfirmed there.

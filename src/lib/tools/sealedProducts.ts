@@ -23,6 +23,8 @@ export type SealedOffer = {
   promo: boolean;
   rateTable: string;
   bonus: SealedBonus[];
+  /** Reported boxes per case. Not applied until the visitor sets the multiplier. */
+  caseCount: number | null;
   note: string | null;
 };
 
@@ -34,7 +36,10 @@ type ProductRule = {
   accessories: boolean;
   promo: boolean;
   match: string;
+  aliases?: string[];
   reject?: string[];
+  caseCount?: number | null;
+  note?: string | null;
 };
 
 type GameRules = {
@@ -63,7 +68,12 @@ const overrides = catalogJson.overrides as OverrideRule[];
 export const FIXED_PRODUCT_NOTE = "EV not applicable: fixed or mixed contents";
 
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function hasCollectorNumber(product: SealedProduct): boolean {
@@ -105,8 +115,9 @@ export function isSpecialPokemonSet(set: { id?: string | null; name?: string | n
 function ruleForName(category: ToolCategoryId, name: string): ProductRule | null {
   const text = normalize(name);
   for (const rule of games[category].products) {
-    if (!text.includes(rule.match)) continue;
-    if ((rule.reject || []).some((token) => text.includes(token))) continue;
+    const tokens = [rule.match, ...(rule.aliases ?? [])].map((token) => normalize(token));
+    if (!tokens.some((token) => token && text.includes(token))) continue;
+    if ((rule.reject || []).some((token) => text.includes(normalize(token)))) continue;
     return rule;
   }
   return null;
@@ -167,7 +178,8 @@ export function buildSealedOffers(
       promo: rule?.promo === true,
       rateTable: override?.rateTable ?? "standard",
       bonus: evApplies ? (override?.bonus ?? []).map((hit) => ({ ...hit })) : [],
-      note: override?.note ?? (evApplies ? null : FIXED_PRODUCT_NOTE),
+      caseCount: typeof rule?.caseCount === "number" && rule.caseCount > 1 ? rule.caseCount : null,
+      note: override?.note ?? rule?.note ?? (evApplies ? null : FIXED_PRODUCT_NOTE),
     });
   }
 

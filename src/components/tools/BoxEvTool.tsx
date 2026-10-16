@@ -290,6 +290,10 @@ function BoxEvForm({
                 Compared price {formatPrice(comparedPrice)} for {multiplier} of this product (
                 {totalPacks} packs).
               </p>
+            ) : selected?.caseCount ? (
+              <p className="text-xs text-slate-400">
+                Case estimate: ×{selected.caseCount} of this product. Case sizes are not verified, so the multiplier starts at 1.
+              </p>
             ) : null}
             {selected?.accessories ? (
               <p className="text-sm text-slate-300">{ACCESSORIES_NOT_VALUED}</p>
@@ -386,10 +390,10 @@ function BoxEvForm({
             Pokémon special sets such as 151, Paldean Fates, Crown Zenith, Prismatic Evolutions, Ascended Heroes, and 30th Celebration do not offer a booster box here. They start on a booster bundle or an ETB.
           </li>
           <li>
-            A case is the ×N multiplier, not its own product. The verdict uses pack EV only. A promo is an optional add-on, off by default. Dice, sleeves, and boxes are accessories and count as $0.
+            A case is the ×N multiplier, not its own product. Reported case sizes are estimates and stay at ×1 until you change the multiplier. The verdict uses pack EV only. A promo is an optional add-on, off by default. Accessories and fixed decks count as $0.
           </li>
           <li>
-            Starter decks, gift sets, tins, and other fixed or mixed products are left out when a pack product exists. {EV_NOT_APPLICABLE}.
+            Gift boxes, mixed collections, Proving Grounds, event bundles, anniversary sets, and tins whose pack list is not known are left out when a pack product exists. {EV_NOT_APPLICABLE}. Japanese and Chinese products are excluded.
           </li>
           <li>
             Pull rates start from public pack notes and opening write-ups. They are still estimates. Premium Booster and Gundam Edition Beta use their own unconfirmed tables.
@@ -435,6 +439,7 @@ function readOffer(value: unknown): SealedOffer | null {
     promo: row.promo === true,
     rateTable: typeof row.rateTable === "string" ? row.rateTable : "standard",
     bonus,
+    caseCount: typeof row.caseCount === "number" && row.caseCount > 1 ? row.caseCount : null,
     note: typeof row.note === "string" ? row.note : null,
   };
 }

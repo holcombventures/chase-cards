@@ -104,7 +104,7 @@ export async function lookupSealedProducts(input: {
   setName?: string | null;
 }): Promise<SealedOffer[]> {
   const setId = input.setId.trim();
-  const key = `sealed-products/v2/${input.category}/${setId}`;
+  const key = `sealed-products/v3/${input.category}/${setId}`;
   const now = Date.now();
   const remembered = freshStored(memoryQuotes.get(key), now) ?? freshStored(await readToolJson(key), now);
   if (remembered) {
