@@ -324,21 +324,30 @@ export function HypeTool() {
       }
     }
     const controller = new AbortController();
+    const started: string[] = [];
+    const finished = new Set<string>();
     for (const [key, target] of wanted) {
       if (observeStarted.current.has(key)) continue;
       observeStarted.current.add(key);
+      started.push(key);
       const params = new URLSearchParams({ category: target.category, setId: target.setId });
       fetch(`/api/tools/observe?${params}`, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok || controller.signal.aborted) return;
           const body = (await res.json()) as ObserveBody;
+          finished.add(key);
           setObserveBySet((current) => (current[key] ? current : { ...current, [key]: body }));
         })
         .catch(() => {
-          /* history stays on the building message */
+          observeStarted.current.delete(key);
         });
     }
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      for (const key of started) {
+        if (!finished.has(key)) observeStarted.current.delete(key);
+      }
+    };
   }, [catalog.category, catalog.selected, parsedWatch, view]);
 
   useEffect(() => {
@@ -376,33 +385,45 @@ export function HypeTool() {
     }
     if (!wanted.length) return;
     const controller = new AbortController();
+    const started = wanted.slice(0, 8).map((target) => cacheKey(target.category, target.setId));
+    const finished = new Set<string>();
     for (const target of wanted.slice(0, 8)) {
+      const key = cacheKey(target.category, target.setId);
       const params = new URLSearchParams({ category: target.category });
       if (target.releaseDate) params.set("releaseDate", target.releaseDate);
       if (target.setName) params.set("setName", target.setName);
       fetch(`/api/sets/${encodeURIComponent(target.setId)}/cards?${params}`, { signal: controller.signal })
         .then(async (res) => {
           const body = (await res.json()) as { data?: CardWithPrice[] };
-          if (!res.ok || !Array.isArray(body.data) || controller.signal.aborted) return;
+          if (!res.ok || !Array.isArray(body.data) || controller.signal.aborted) {
+            cardFetchStarted.current.delete(key);
+            return;
+          }
           const cards = body.data.map((card) => ({
             id: card.id,
             name: card.name,
             marketPrice: card.marketPrice,
           }));
           const next = parseCardCache(window.localStorage.getItem(CARD_CACHE_KEY) || "{}");
-          next[cacheKey(target.category, target.setId)] = {
+          next[key] = {
             at: Date.now(),
             setName: target.setName,
             releaseDate: target.releaseDate,
             cards,
           };
+          finished.add(key);
           writeRaw(CARD_CACHE_KEY, JSON.stringify(next));
         })
         .catch(() => {
-          /* a later visit retries */
+          cardFetchStarted.current.delete(key);
         });
     }
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      for (const key of started) {
+        if (!finished.has(key)) cardFetchStarted.current.delete(key);
+      }
+    };
   }, [catalog.category, catalog.sets, parsedWatch, view]);
 
   function setView(next: HypeView) {
