@@ -31,6 +31,13 @@ export type CardsApiMeta = {
   part?: "catalog" | "prices" | "full";
   /** ISO time the price snapshot was fetched. Not a live tick. */
   pricesAsOf?: string | null;
+  /**
+   * TCGplayer market for a sealed booster box or display in this set,
+   * when the same product feed lists one. An editable estimate, not a quote
+   * the tool is required to use.
+   */
+  sealedBoxMarket?: number | null;
+  sealedBoxName?: string | null;
   /** Where this price response was served from. */
   priceCache?: "hit" | "miss" | "memory";
 };

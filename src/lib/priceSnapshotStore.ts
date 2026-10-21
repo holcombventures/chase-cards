@@ -137,6 +137,21 @@ async function backendSet(key: string, snapshot: PriceSnapshot): Promise<void> {
   }
 }
 
+/** Latest stored snapshot, including one that is past the category TTL. */
+export async function readStoredPriceSnapshot(
+  category: string,
+  setId: string,
+): Promise<PriceSnapshot | null> {
+  let raw: unknown;
+  try {
+    raw = await backendGet(priceSnapshotKey(category, setId));
+  } catch (err) {
+    console.error("price snapshot read failed:", err);
+    return null;
+  }
+  return parsePriceSnapshot(raw);
+}
+
 export async function readFreshPriceSnapshot(
   category: string,
   setId: string,
